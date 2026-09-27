@@ -1,103 +1,90 @@
 # 갤럭시 배터리 수명 확인
 
-Galaxy S25에서 배터리 성능과 충전 사이클을 확인하기 위한 **Kotlin Android 앱**입니다. 현재 버전은 **0.3.2**입니다.
+갤럭시가 기록한 **배터리 진단 값과 충전 사이클**을 확인하는 Android 앱 **배터리 상태**입니다. Shizuku로 배터리 정보를 불러오거나, SysDump 로그 파일에서 필요한 값을 추출합니다.
 
-### [⬇ 앱 설치 파일 다운로드 · v0.3.2](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.3.2.apk)
+**[앱 다운로드 · v0.3.2](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.3.2.apk)** · **[Shizuku 설치·연결](docs/SHIZUKU_SETUP_KO.md)** · **[코드 수정·빌드](docs/DEVELOPMENT.md)**
 
-휴대폰에서 링크를 눌러 APK를 다운로드한 뒤 실행하면 설치할 수 있습니다.
+> 수명·사이클을 버튼으로 조회하려면 **Shizuku 연결이 필요합니다.** 기종과 펌웨어에 따라 정보를 읽지 못할 수 있으며, 이때는 로그 파일 분석을 사용할 수 있습니다.
 
-잔량·온도·전압·전류 등 기본 정보는 화면을 보고 있는 동안 2초마다 다시 조회합니다. 화면을 벗어나면 자동 갱신을 멈춥니다. 실제 센서 값의 갱신 주기는 기기에서 제공하는 주기를 따르며, Shizuku의 성능·사이클과 불러온 로그는 별도 조회 결과입니다.
+## 설치하고 시작하기
 
-## APK 설치
+1. **휴대폰에서 [APK 다운로드](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.3.2.apk)**를 누릅니다.
+2. 다운로드 알림 또는 **내 파일 → 다운로드**에서 APK를 열어 설치합니다. 설치 권한 안내가 나오면 파일을 연 앱의 설치 권한을 허용합니다.
+3. **[Shizuku 연결 가이드](docs/SHIZUKU_SETUP_KO.md)**에 따라 Shizuku를 설치하고 시작합니다.
+4. 앱에서 **배터리 상태 확인**을 누르고, 처음 나타나는 Shizuku 권한 요청을 허용합니다.
 
-1. 휴대폰에서 **[앱 설치 파일 다운로드](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.3.2.apk)**를 누릅니다.
-2. 다운로드가 끝나면 알림 또는 **내 파일 → 다운로드**에서 APK를 엽니다.
-3. 설치를 진행합니다. 설치 권한 안내가 나오면 파일을 연 앱의 설치 권한을 허용합니다.
+이후에는 **배터리 상태 확인** 버튼으로 다시 조회하면 됩니다. 휴대폰을 재부팅한 뒤에는 Shizuku를 다시 시작해야 할 수 있습니다.
 
-기존 버전을 사용 중이라면 앱을 삭제하지 않고 업데이트할 수 있습니다. 설치 후에는 **[Shizuku 연결 가이드](docs/SHIZUKU_SETUP_KO.md)**를 따라 설정하세요.
+이 저장소에서 받은 이전 APK는 앱을 삭제하지 않고 업데이트할 수 있습니다. 다운로드 파일의 체크섬은 [SHA256SUMS.txt](dist/SHA256SUMS.txt)에서 확인할 수 있습니다.
 
-## Shizuku로 조회
+## 확인할 수 있는 정보
 
-처음 사용한다면 **[Shizuku 설치·설정 가이드](docs/SHIZUKU_SETUP_KO.md)**를 따라 진행하세요.
+| 항목 | 표시 내용 | 갱신 방식 |
+|---|---|---|
+| 배터리 성능 카드 | 휴대폰에 저장된 ASOC 값 — 아래 해석 주의사항 참고 | 상세 조회 또는 로그 불러오기 |
+| 충전 사이클 | 휴대폰이 제공한 사이클 또는 누적 사용량을 환산한 추정치 | 상세 조회 또는 로그 불러오기 |
+| 현재 배터리 상태 | 잔량, 온도, 전압, 순간 전류, 남은 전하량, 상태 코드 | 화면을 보는 동안 2초마다 조회 |
+| 측정 근거 | 원본 배터리 필드, 출처, 읽은 시각, BSOH 등 | 조회 결과와 함께 표시 |
 
-1. [Shizuku 공식 사이트](https://shizuku.rikka.app/download/)에서 Shizuku를 설치합니다.
-2. 휴대폰 개발자 옵션에서 무선 디버깅을 켜고, Shizuku 안내에 따라 페어링한 뒤 시작합니다.
-3. 이 앱의 **배터리 상태 확인**을 누릅니다.
-4. 처음 표시되는 Shizuku 권한 요청을 허용합니다.
-5. 다음부터는 **배터리 상태 확인**을 누르면 됩니다. 재부팅 후 Shizuku를 다시 시작해야 할 수 있습니다.
+화면을 벗어나면 주기적인 조회를 멈춥니다. **2초는 앱의 조회 간격**이며, 센서 값 자체가 바뀌는 주기는 휴대폰이 결정합니다. 상세 조회 결과와 로그 기록은 이 자동 갱신에 포함되지 않습니다.
 
-앱은 Shizuku 권한으로 `dumpsys -t 12 battery`를 읽습니다. 배터리 관련 필드만 추출하며 시스템 설정 변경·배터리 통계 초기화·루팅은 하지 않습니다. S25 One UI 9.0 베타에서 해당 필드가 실제 제공되는지는 기기에서 확인해야 합니다. Shizuku가 연결되어도 펌웨어가 정보를 공개하지 않으면 파일 분석을 이용해야 합니다.
+## Shizuku로 값이 나오지 않는다면
 
-## SysDump 파일 분석
+앱의 **로그 불러오기**로 SysDump 파일을 분석할 수 있습니다. 이 방식은 Shizuku 연결 없이 사용할 수 있습니다.
 
-1. 삼성 전화에서 `*#9900#`을 입력합니다.
-2. **Run dumpstate/logcat**을 실행합니다.
-3. 완료되면 **Copy to sdcard** 또는 이에 해당하는 복사 메뉴를 실행합니다.
-4. 앱의 **로그 불러오기 → 파일 선택**을 누릅니다.
-5. 내부 저장소의 `log` 폴더에서 새 `dumpstate*.log` 등의 파일을 선택합니다.
+1. 삼성 전화 앱에서 `*#9900#`을 입력합니다.
+2. **Run dumpstate/logcat**을 실행하고 완료될 때까지 기다립니다.
+3. **Copy to sdcard** 또는 해당 복사 메뉴를 실행합니다.
+4. 이 앱의 **로그 불러오기 → 파일 선택**에서 내부 저장소 `log` 폴더의 최신 `dumpstate` 파일을 선택합니다.
 
-메뉴와 경로는 펌웨어마다 다릅니다. 선택기에서 보이지 않으면 **내 파일**에서 `Download` 폴더로 복사하세요. **덤프 생성은 사용자가 직접 하고, 검색과 환산은 앱이 자동 처리**합니다.
+파일이 보이지 않으면 삼성 **내 파일**에서 `Download` 폴더로 복사한 뒤 선택하세요. SysDump 메뉴의 제공 여부, 이름과 저장 위치는 펌웨어에 따라 다릅니다.
 
-TXT/LOG, ZIP 안의 텍스트 로그, GZIP을 지원합니다. ZIP에 과거와 현재의 서로 다른 값이 있으면 임의로 하나를 고르지 않습니다. 압축을 풀어 원하는 최신 로그 한 개를 선택하세요. 중첩 ZIP/GZIP은 재귀 분석하지 않습니다. 압축 해제 후 512 MiB, 최대 90초로 제한합니다.
+**덤프 생성은 직접 진행하고, 배터리 항목 검색과 계산은 앱이 처리합니다.** TXT·LOG·ZIP·GZIP을 지원합니다. ZIP에 서로 다른 시점의 값이 섞여 있으면 하나를 임의로 선택하지 않으므로, 압축을 풀어 최신 로그 한 개를 선택하는 편이 좋습니다.
 
-## 값의 의미
+## ASOC와 BSOH는 어떻게 다른가요?
 
-| 항목 | 처리 방식 |
-|---|---|
-| ASOC | `mSavedBatteryAsoc`의 1~100 값을 성능 추정치로 표시. 독립적인 용량 실측값이 아닙니다. |
-| 추정 사이클 | `mSavedBatteryUsage / 100`. 삼성의 공개 API 계약이 보장하는 공식 수치가 아닌 로그 해석 기반 추정치입니다. |
-| BSOH | `mSavedBatteryBsoh`. ASOC와 섞지 않고 **측정 근거**에 별도 표시합니다. |
-| 공식 API | 기본 사이클과 플랫폼 속성 ID 10의 SOH도 조회. 상세 조회 후에는 출처가 표시된 상세 결과를 우선 표시합니다. |
-| 기본 정보 | 잔량·온도·전압·순간 전류·남은 전하량·상태. 남은 전하량은 완충 용량이 아닙니다. |
+[삼성 Members 운영진의 설명](https://r1.community.samsung.com/t5/galaxy-s/phone-battery-health/td-p/37000087)에 따르면 **ASOC는 충전량 보정과 관련된 값**, **BSOH는 원래 설계 용량 대비 배터리 건강 상태를 나타내는 값**이며, 배터리 건강 상태를 판단할 때는 BSOH가 더 적합합니다. 이는 지원 포럼의 설명이며, 기종·펌웨어별 내부 계산식까지 공개한 기술 명세는 아닙니다.
 
-누락·미지원·범위 밖·충돌값을 건강한 배터리처럼 표시하지 않습니다. 사이클 0도 실제 0회인지 미지원인지 확정하지 않습니다. 파일 결과는 생성 당시 기록이며 화면의 읽은 시각은 로그 생성 시각이 아닙니다. 배터리 교체·펌웨어 변경 후에는 실제 이력과 일치하는지 확인이 필요합니다.
+**현재 v0.3.2는 ‘배터리 성능’ 카드에 ASOC를 표시하고, BSOH는 ‘측정 근거’에 별도로 표시합니다.** 카드의 ASOC를 그대로 ‘남은 수명 %’ 또는 정확한 용량 유지율로 해석하지 마세요. 두 값은 서로 대체하거나 평균 내지 않습니다. 상태 표시줄의 현재 배터리 잔량과도 구분해야 합니다.
 
-## 코드 열기
+## 수치를 해석할 때
 
-### Visual Studio Code
+- **진단 값은 앱이 직접 실측한 용량이나 남은 사용 연수가 아닙니다.** 실제 사용 시간과 일치한다고 보장할 수 없습니다.
+- **추정 사이클은 `mSavedBatteryUsage ÷ 100`으로 계산합니다.** 삼성의 공개 API로 보장된 공식 환산 규칙은 아니며, 충전기를 연결한 횟수와도 다릅니다.
+- **‘정상’이라는 상태는 성능 100%를 뜻하지 않습니다.** 남은 전하량 역시 완충 용량과 다릅니다.
+- **로그는 생성 당시의 기록입니다.** 화면에 표시되는 읽은 시각을 로그 생성 시각으로 해석하면 안 됩니다.
 
-1. **배터리 상태.code-workspace**를 VS Code로 열거나 **파일 → 폴더 열기**에서 이 프로젝트를 선택합니다.
-2. 탐색기에서 `app/src/main/java/kr/local/galaxybattery`를 펼칩니다.
-3. 수정 후 **Ctrl+Shift+B**를 누르면 APK 빌드 작업이 실행됩니다.
+앱은 누락·미지원·범위 밖 값이나 서로 충돌하는 값을 확정 수치로 표시하지 않습니다. 사이클 값이 0인 경우에도 실제 0회인지 미지원 값인지 구분할 수 없어 확정하지 않습니다. ASOC와 BSOH는 서로 섞지 않고, BSOH는 **측정 근거**에서 별도로 보여줍니다.
 
-| 파일 | 내용 |
-|---|---|
-| MainActivity.kt | 제목·문구·화면·버튼·파일 선택·결과 표시 |
-| ShizukuReader.kt | 연결·권한·서비스 연결·시간 제한 |
-| RemoteBatteryService.kt | Shizuku 권한으로 실행하는 고정 배터리 조회 |
-| DumpParser.kt | 필드 추출·압축 파일 읽기·모호한 값 처리 |
-| BatteryValues.kt | 기본 값 검사·단위 변환 |
+## 지원 환경과 확인 범위
 
-직접 작성한 앱 소스는 모두 Kotlin입니다. `java` 폴더에는 Kotlin 소스를 넣어도 됩니다. AIDL에서 생성한 Binder 연결 코드와 검증용 테스트 실행기는 Java입니다. Windows 한글 경로의 AIDL 생성기 문제를 피하기 위해 생성된 `IRemoteBattery.java`를 소스에 포함했습니다. 일반적인 UI·조회·파서 수정에는 이 파일을 수정할 필요가 없습니다.
+- **앱 최소 실행 환경:** Android 8.0 이상
+- **PC 없이 Shizuku를 연결하는 무선 디버깅 방식:** Android 11 이상
+- **개발 기준 기기:** Galaxy S25 · One UI 9.0 베타
+- **검증:** 값 처리·로그 분석 56개 검증과 APK 빌드·서명 검증 통과
 
-### Android Studio
+모든 갤럭시에서 상세 정보를 읽을 수 있다고 보장하지 않습니다. **S25 베타에서 Shizuku를 통한 상세 값 조회 성공 여부는 아직 실기기 확인이 필요합니다.** Shizuku 연결 성공과 배터리 필드 제공 여부는 별개입니다.
 
-**Open**에서 최상위 폴더를 선택합니다. Kotlin 2.1.21 / AGP 8.9.2 / Gradle 8.11.1 / JDK 17 / SDK 35 프로젝트입니다. Gradle의 `:app:assembleDebug` 빌드도 이 작업 폴더에서 성공했습니다. IDE가 SDK 위치를 물으면 설치된 Android SDK를 선택하세요. 다른 Windows 환경에서 한글 경로 문제가 생기면 영문 경로의 복사본이나 PowerShell 빌드를 이용하세요.
+## 개인정보와 문제 제보
 
-### PowerShell
+배터리 정보와 선택한 로그는 **기기 안에서 처리**합니다. 앱에는 인터넷 권한, 광고·분석 SDK, 자동 업로드 기능이 없습니다.
 
-이 폴더에는 도구가 `.tools`에 준비되어 있습니다. 시스템 PATH는 변경하지 않았습니다.
+**측정 근거 · 결과 공유**를 누르면 배터리 필드, 모델명, OS 빌드, 조회 시각과 연결 진단을 복사하거나 공유할 수 있습니다. 전체 덤프 파일과 무관한 로그 내용은 공유 결과에 포함하지 않습니다.
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
-```
+문제가 있으면 [Issues](https://github.com/Lumi-01/galaxy-battery-health-check/issues)에 증상과 앱 버전을 남겨 주세요. 값 조회 문제는 앱에서 복사한 측정 근거를 함께 제공하면 확인에 도움이 됩니다. 전체 덤프 파일은 필요하지 않습니다.
 
-새 PC에서는 먼저 `setup-tools.ps1`을 실행합니다. Kotlin 컴파일러, Kotlin 2.1 호환 D8 8.9.35, Android 빌드 도구로 APK를 만듭니다. 빌드 시 이전 클래스와 생성 코드를 정리하므로 Java 소스의 잔여물이 섞이지 않습니다.
+## 코드 수정과 빌드
 
-APK는 `dist/galaxy-battery-0.3.2.apk`, SHA-256은 `dist/SHA256SUMS.txt`입니다. 기존 앱 업데이트에 쓰이는 `.tools/diagnostic.keystore`를 보관하세요. 공개 배포용 서명은 별도로 관리해야 합니다.
+앱의 화면과 기능은 Kotlin으로 작성되어 있습니다. **[개발 가이드](docs/DEVELOPMENT.md)**에서 코드 위치, Android Studio·VS Code 사용법, 빌드 방법을 확인할 수 있습니다.
 
-## 개인정보와 검증
+화면 제목·문구·버튼을 수정하려면 [MainActivity.kt](app/src/main/java/kr/local/galaxybattery/MainActivity.kt)부터 보면 됩니다.
 
-인터넷 권한, 광고·분석 SDK, 자동 전송 기능이 없습니다. 결과와 선택 파일은 기기 안에서 분석합니다. 전체 파일, 일련번호, IMEI, 계정, 무관한 로그 행은 결과에 포함하지 않습니다. **측정 근거 → 공유/복사**에는 배터리 필드·모델·OS 빌드·조회 시각·연결 진단만 담습니다. 파일의 지속 접근 권한은 보관하지 않습니다.
+## 참고 자료
 
-PowerShell 빌드에서 값 검증 21개와 파서 검증 35개를 실행합니다. 일반/배열, 중복·충돌, 미지원·잘못된 숫자, UTF-8/UTF-16, ZIP/GZIP, 큰 줄, 취소, 손상 압축, 개인정보 제외를 확인합니다. APK 서명과 정렬도 검사합니다. 실제 S25 베타의 Shizuku 연결과 값 조회는 실기기 확인이 필요합니다.
-
-## 출처
-
-- [Shizuku API](https://github.com/RikkaApps/Shizuku-API)
-- [Android 파일 선택기](https://developer.android.com/training/data-storage/shared/documents-files)
+- [Shizuku 공식 사이트](https://shizuku.rikka.app/) · [Shizuku API](https://github.com/RikkaApps/Shizuku-API)
 - [Android BatteryManager](https://developer.android.com/reference/android/os/BatteryManager)
-- [MyBattery 개발자의 로그 필드 설명](https://github.com/Alyaqdhans/MyBattery)
-- [사용자가 제공한 SysDump 안내](https://www.reddit.com/r/samsunggalaxy/comments/1qvv3y1/guide_how_to_check_your_true_samsung_battery/)
+- [MyBattery의 삼성 로그 필드 설명](https://github.com/Alyaqdhans/MyBattery)
+- [SysDump 방법을 소개한 커뮤니티 글](https://www.reddit.com/r/samsunggalaxy/comments/1qvv3y1/guide_how_to_check_your_true_samsung_battery/)
+- [외부 라이브러리 및 라이선스](THIRD_PARTY.md)
 
-SDK 라이선스는 APK assets에 포함됩니다. 포럼의 충전 보정이나 교체 기준은 앱의 판단 근거로 사용하지 않습니다.
+커뮤니티 자료의 충전 보정 방법이나 배터리 교체 기준은 앱의 판단 근거로 사용하지 않습니다.
