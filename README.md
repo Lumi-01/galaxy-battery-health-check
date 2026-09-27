@@ -1,8 +1,8 @@
-# 배터리 상태 — Galaxy Battery
+# 갤럭시 배터리 수명 확인
 
 Galaxy S25에서 배터리 성능과 충전 사이클을 확인하기 위한 **Kotlin Android 앱**입니다. 현재 버전은 **0.3.2**입니다.
 
-### [⬇ 앱 설치 파일 다운로드 · v0.3.2](https://raw.githubusercontent.com/Lumi-01/galaxy-battery/main/dist/galaxy-battery-0.3.2.apk)
+### [⬇ 앱 설치 파일 다운로드 · v0.3.2](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.3.2.apk)
 
 휴대폰에서 링크를 눌러 APK를 다운로드한 뒤 실행하면 설치할 수 있습니다.
 
@@ -10,7 +10,7 @@ Galaxy S25에서 배터리 성능과 충전 사이클을 확인하기 위한 **K
 
 ## APK 설치
 
-1. 휴대폰에서 **[앱 설치 파일 다운로드](https://raw.githubusercontent.com/Lumi-01/galaxy-battery/main/dist/galaxy-battery-0.3.2.apk)**를 누릅니다.
+1. 휴대폰에서 **[앱 설치 파일 다운로드](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.3.2.apk)**를 누릅니다.
 2. 다운로드가 끝나면 알림 또는 **내 파일 → 다운로드**에서 APK를 엽니다.
 3. 설치를 진행합니다. 설치 권한 안내가 나오면 파일을 연 앱의 설치 권한을 허용합니다.
 
