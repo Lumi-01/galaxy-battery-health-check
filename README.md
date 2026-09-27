@@ -2,11 +2,19 @@
 
 Galaxy S25에서 배터리 성능과 충전 사이클을 확인하기 위한 **Kotlin Android 앱**입니다. 현재 버전은 **0.3.2**입니다.
 
+### [⬇ 앱 설치 파일 다운로드 · v0.3.2](https://raw.githubusercontent.com/Lumi-01/galaxy-battery/main/dist/galaxy-battery-0.3.2.apk)
+
+휴대폰에서 링크를 눌러 APK를 다운로드한 뒤 실행하면 설치할 수 있습니다.
+
 잔량·온도·전압·전류 등 기본 정보는 화면을 보고 있는 동안 2초마다 다시 조회합니다. 화면을 벗어나면 자동 갱신을 멈춥니다. 실제 센서 값의 갱신 주기는 기기에서 제공하는 주기를 따르며, Shizuku의 성능·사이클과 불러온 로그는 별도 조회 결과입니다.
 
 ## APK 설치
 
-PC 바탕화면의 `갤럭시 배터리 수명 확인/dist/galaxy-battery-0.3.2.apk`를 휴대폰에 옮겨 설치하세요. 이전 0.1.0과 같은 서명키를 사용하므로 기존 앱 위에 업데이트할 수 있습니다.
+1. 휴대폰에서 **[앱 설치 파일 다운로드](https://raw.githubusercontent.com/Lumi-01/galaxy-battery/main/dist/galaxy-battery-0.3.2.apk)**를 누릅니다.
+2. 다운로드가 끝나면 알림 또는 **내 파일 → 다운로드**에서 APK를 엽니다.
+3. 설치를 진행합니다. 설치 권한 안내가 나오면 파일을 연 앱의 설치 권한을 허용합니다.
+
+기존 버전을 사용 중이라면 앱을 삭제하지 않고 업데이트할 수 있습니다. 설치 후에는 **[Shizuku 연결 가이드](docs/SHIZUKU_SETUP_KO.md)**를 따라 설정하세요.
 
 ## Shizuku로 조회
 
