@@ -127,7 +127,8 @@ class MainActivity : Activity() {
         text(outer, "${Build.MODEL}  ·  Android ${Build.VERSION.RELEASE}", 13, MUTED)
 
         val advanced = card(outer)
-        text(advanced, "수명과 충전 기록", 18, FG, true)
+        text(advanced, "배터리 정보 불러오기", 18, FG, true)
+        text(advanced, "배터리 수명과 사이클을 불러오려면 Shizuku 연결이 필요해요. 아래 ‘연결 설정’에서 시작해 주세요.", 13, MUTED)
         advancedStatus = text(advanced, "연결 상태를 확인하고 있어요…", 13, MUTED)
         button(advanced, "배터리 상태 확인") { if (!importing) shizuku?.query() }
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -164,7 +165,7 @@ class MainActivity : Activity() {
         }
         updated = text(outer, "", 12, MUTED).apply { setPadding(0, dp(18), 0, dp(6)) }
         button(outer, "측정 근거 · 결과 공유") { showReport() }
-        text(outer, "배터리 기록은 이 기기에서만 처리해요. 공유할 때도 배터리 결과만 전달됩니다.\nv0.3.1", 12, MUTED)
+        text(outer, "배터리 기록은 이 기기에서만 처리해요. 공유할 때도 배터리 결과만 전달됩니다.\nv0.3.2", 12, MUTED)
         setContentView(scroll)
     }
 
@@ -224,7 +225,7 @@ class MainActivity : Activity() {
         updated.text = "기본 정보 업데이트  ${SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date())}"
 
         report = buildString {
-            append("Galaxy Battery v0.3.1 / Kotlin\n조회 시간: $time\n")
+            append("Galaxy Battery v0.3.2 / Kotlin\n조회 시간: $time\n")
             append("Model: ${Build.MODEL}\nAndroid: ${Build.VERSION.RELEASE}\nSDK: ${Build.VERSION.SDK_INT}\n")
             append("Build: ${Build.DISPLAY}\nSecurity patch: ${Build.VERSION.SECURITY_PATCH}\n")
             append("\n공식 사이클 원본: ${rawCycle ?: "미제공"}\n플랫폼 SOH 속성 10: ${healthProperty.raw}\n")

@@ -1,12 +1,12 @@
 # 배터리 상태 — Galaxy Battery
 
-Galaxy S25에서 배터리 성능과 충전 사이클을 확인하기 위한 **Kotlin Android 앱**입니다. 현재 버전은 **0.3.1**입니다.
+Galaxy S25에서 배터리 성능과 충전 사이클을 확인하기 위한 **Kotlin Android 앱**입니다. 현재 버전은 **0.3.2**입니다.
 
 잔량·온도·전압·전류 등 기본 정보는 화면을 보고 있는 동안 2초마다 다시 조회합니다. 화면을 벗어나면 자동 갱신을 멈춥니다. 실제 센서 값의 갱신 주기는 기기에서 제공하는 주기를 따르며, Shizuku의 성능·사이클과 불러온 로그는 별도 조회 결과입니다.
 
 ## APK 설치
 
-PC 바탕화면의 `갤럭시 배터리 수명 확인/dist/galaxy-battery-0.3.1.apk`를 휴대폰에 옮겨 설치하세요. 이전 0.1.0과 같은 서명키를 사용하므로 기존 앱 위에 업데이트할 수 있습니다.
+PC 바탕화면의 `갤럭시 배터리 수명 확인/dist/galaxy-battery-0.3.2.apk`를 휴대폰에 옮겨 설치하세요. 이전 0.1.0과 같은 서명키를 사용하므로 기존 앱 위에 업데이트할 수 있습니다.
 
 ## Shizuku로 조회
 
@@ -76,7 +76,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 새 PC에서는 먼저 `setup-tools.ps1`을 실행합니다. Kotlin 컴파일러, Kotlin 2.1 호환 D8 8.9.35, Android 빌드 도구로 APK를 만듭니다. 빌드 시 이전 클래스와 생성 코드를 정리하므로 Java 소스의 잔여물이 섞이지 않습니다.
 
-APK는 `dist/galaxy-battery-0.3.1.apk`, SHA-256은 `dist/SHA256SUMS.txt`입니다. 기존 앱 업데이트에 쓰이는 `.tools/diagnostic.keystore`를 보관하세요. 공개 배포용 서명은 별도로 관리해야 합니다.
+APK는 `dist/galaxy-battery-0.3.2.apk`, SHA-256은 `dist/SHA256SUMS.txt`입니다. 기존 앱 업데이트에 쓰이는 `.tools/diagnostic.keystore`를 보관하세요. 공개 배포용 서명은 별도로 관리해야 합니다.
 
 ## 개인정보와 검증
 
