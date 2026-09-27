@@ -10,6 +10,7 @@
 
 | 파일 | 역할 |
 |---|---|
+| [HistoryStore.kt](../app/src/main/java/kr/local/galaxybattery/HistoryStore.kt) | 조회 결과의 기기 내 영구 저장, 날짜순 읽기, 개별·전체 삭제 |
 | [MainActivity.kt](../app/src/main/java/kr/local/galaxybattery/MainActivity.kt) | 화면, 문구, 색상, 버튼, 파일 선택, 2초 간격 조회, 결과 표시 |
 | [ShizukuReader.kt](../app/src/main/java/kr/local/galaxybattery/ShizukuReader.kt) | Shizuku 연결, 권한 요청, 서비스 연결, 시간 제한 및 정리 |
 | [RemoteBatteryService.kt](../app/src/main/java/kr/local/galaxybattery/RemoteBatteryService.kt) | Shizuku 권한으로 고정된 배터리 조회 명령 실행 |
@@ -68,7 +69,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 이후 소스만 수정했다면 `build.ps1`만 다시 실행하면 됩니다.
 
-- APK: `dist/galaxy-battery-0.3.2.apk`
+- APK: `dist/galaxy-battery-0.3.3.apk`
 - 체크섬: `dist/SHA256SUMS.txt`
 - 로컬 서명키: `.tools/diagnostic.keystore`
 
@@ -92,6 +93,7 @@ PowerShell 빌드는 다음 검증을 실행합니다.
 
 - [BatteryValuesTest.java](../tests/BatteryValuesTest.java): 기본 값 처리 21개
 - [DumpParserTest.java](../tests/DumpParserTest.java): 로그 분석 35개
+- [HistoryStoreTest.java](../tests/HistoryStoreTest.java): 재실행 후 유지, 정렬, 저장 실패, 개별·전체 삭제 등 11개
 - APK 서명·정렬·매니페스트 확인
 
 테스트는 별도 JVM 실행기이며 Gradle의 `test` 작업에 연결되어 있지 않습니다. Android 화면 동작, Shizuku 권한 창, 실제 삼성 펌웨어의 응답은 실기기에서 별도로 확인해야 합니다.

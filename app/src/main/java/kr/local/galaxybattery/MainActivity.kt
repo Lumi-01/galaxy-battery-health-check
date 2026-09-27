@@ -34,6 +34,9 @@ class MainActivity : Activity() {
     private lateinit var progress: ProgressBar
     private var shizuku: ShizukuReader? = null
     private val fileWorker = Executors.newSingleThreadExecutor()
+    private val historyWorker = Executors.newSingleThreadExecutor()
+    private val historyStore by lazy { HistoryStore(java.io.File(noBackupFilesDir, "battery-history")) }
+    private lateinit var historyStatus: TextView
     private var importing = false
     private var registered = false
     private var lastBattery: Intent? = null
@@ -101,6 +104,7 @@ class MainActivity : Activity() {
         refreshHandler.removeCallbacks(liveRefresh)
         shizuku?.close()
         fileWorker.shutdownNow()
+        historyWorker.shutdown()
         super.onDestroy()
     }
 
@@ -165,7 +169,13 @@ class MainActivity : Activity() {
         }
         updated = text(outer, "", 12, MUTED).apply { setPadding(0, dp(18), 0, dp(6)) }
         button(outer, "측정 근거 · 결과 공유") { showReport() }
-        text(outer, "배터리 기록은 이 기기에서만 처리해요. 공유할 때도 배터리 결과만 전달됩니다.\nv0.3.2", 12, MUTED)
+        card(outer).also {
+            text(it, "배터리 기록", 18, FG, true)
+            historyStatus = text(it, "상세 조회와 로그 분석 결과를 자동으로 저장해요. 이전 기록에서 변화와 측정 근거를 확인할 수 있어요.", 13, MUTED)
+            button(it, "이전 기록 보기") { showHistory() }
+            text(it, "원본 덤프는 보관하지 않아요. 저장한 기록은 개별 또는 전체 삭제할 수 있어요.", 12, MUTED)
+        }
+        text(outer, "배터리 기록은 이 기기에서만 처리해요. 공유할 때도 배터리 결과만 전달됩니다.\nv0.3.3", 12, MUTED)
         setContentView(scroll)
     }
 
@@ -225,11 +235,13 @@ class MainActivity : Activity() {
         updated.text = "기본 정보 업데이트  ${SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date())}"
 
         report = buildString {
-            append("Galaxy Battery v0.3.2 / Kotlin\n조회 시간: $time\n")
+            append("Galaxy Battery v0.3.3 / Kotlin\n조회 시간: $time\n")
             append("Model: ${Build.MODEL}\nAndroid: ${Build.VERSION.RELEASE}\nSDK: ${Build.VERSION.SDK_INT}\n")
             append("Build: ${Build.DISPLAY}\nSecurity patch: ${Build.VERSION.SECURITY_PATCH}\n")
             append("\n공식 사이클 원본: ${rawCycle ?: "미제공"}\n플랫폼 SOH 속성 10: ${healthProperty.raw}\n")
             append("Current (uA): ${current.raw}\nCharge counter (uAh): ${charge.raw}\n")
+            append("현재 잔량: ${level?.let { "$it%" } ?: "정보 없음"}\n충전 상태: ${statusView.text}\n")
+            append("${details.text}\n")
             append("잔여 전하량은 완충 용량이 아닙니다. 상태 ‘정상’은 성능 100%를 뜻하지 않습니다.\n")
             append("사이클 0은 실제 0회/미지원 값을 구분할 수 없어 확정하지 않습니다.\n")
             detailed?.let {
@@ -248,6 +260,79 @@ class MainActivity : Activity() {
             else "배터리 항목을 찾지 못했어요. 새로 생성한 dumpstate 로그를 선택해 주세요."
         updateDetailCaption()
         render(lastBattery)
+        if (result.hasFields()) {
+            val savedTime = System.currentTimeMillis()
+            val savedReport = report
+            val summary = result.summary()
+            historyWorker.execute {
+                try {
+                    historyStore.save(savedTime, source, summary, savedReport)
+                    runOnUiThread { if (!isDestroyed) historyStatus.text = "최근 조회 결과를 저장했어요. ‘이전 기록 보기’에서 확인해 주세요." }
+                } catch (_: Exception) {
+                    runOnUiThread { if (!isDestroyed) historyStatus.text = "결과는 조회했지만 기록을 저장하지 못했어요. 기기의 저장 공간을 확인해 주세요." }
+                }
+            }
+        }
+    }
+
+    private fun showHistory() {
+        historyWorker.execute {
+            try {
+                val entries = historyStore.list()
+                runOnUiThread {
+                    if (isDestroyed || isFinishing) return@runOnUiThread
+                    val dialog = AlertDialog.Builder(this).setTitle("배터리 기록 · ${entries.size}개")
+                        .setNegativeButton("닫기", null)
+                    if (entries.isEmpty()) {
+                        dialog.setMessage("아직 저장된 기록이 없어요. 상세 정보를 조회하거나 배터리 로그를 불러오면 자동으로 저장돼요.")
+                    } else {
+                        dialog.setItems(entries.map {
+                            "${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(it.time))} · ${it.source}\n${it.summary.replace('\n', ' ')}"
+                        }.toTypedArray()) { _, index -> showHistoryEntry(entries[index]) }
+                        dialog.setNeutralButton("전체 삭제") { _, _ -> confirmHistoryDelete(entries.map { it.id }) }
+                    }
+                    dialog.show()
+                }
+            } catch (_: Exception) {
+                runOnUiThread { if (!isDestroyed) toast("저장된 기록을 읽지 못했어요. 잠시 후 다시 시도해 주세요.") }
+            }
+        }
+    }
+
+    private fun showHistoryEntry(entry: HistoryStore.Entry) {
+        val content = TextView(this).apply {
+            text = "저장된 조회 결과 · ${entry.source}\n로그 분석 기록의 시각은 파일을 읽은 시각이에요.\n\n${entry.report}"
+            textSize = 13f
+            setTextIsSelectable(true)
+            setPadding(dp(20), dp(12), dp(20), dp(12))
+        }
+        AlertDialog.Builder(this)
+            .setTitle(SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(entry.time)))
+            .setView(ScrollView(this).apply { addView(content) })
+            .setPositiveButton("목록으로") { _, _ -> showHistory() }
+            .setNeutralButton("삭제") { _, _ -> confirmHistoryDelete(listOf(entry.id)) }
+            .setNegativeButton("닫기", null).show()
+    }
+
+    private fun confirmHistoryDelete(ids: List<String>) {
+        AlertDialog.Builder(this).setTitle("기록 ${ids.size}개를 삭제할까요?")
+            .setMessage("삭제한 기록은 복구할 수 없어요. 직접 선택했던 원본 로그 파일은 삭제하지 않아요.")
+            .setNegativeButton("취소") { _, _ -> showHistory() }
+            .setPositiveButton("삭제") { _, _ ->
+                historyWorker.execute {
+                    try {
+                        historyStore.delete(ids)
+                        runOnUiThread {
+                            if (!isDestroyed && !isFinishing) {
+                                historyStatus.text = "선택한 기록을 삭제했어요. 다음 조회 결과는 다시 자동 저장돼요."
+                                showHistory()
+                            }
+                        }
+                    } catch (_: Exception) {
+                        runOnUiThread { if (!isDestroyed) toast("일부 기록을 삭제하지 못했어요. 목록을 다시 확인해 주세요.") }
+                    }
+                }
+            }.show()
     }
 
     private fun updateDetailCaption() {
