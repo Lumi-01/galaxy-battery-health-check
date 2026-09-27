@@ -1,0 +1,16 @@
+.tools/
+build/
+*.keystore
+local.properties
+.gradle/
+.idea/
+app/build/
+.kotlin/
+*.jks
+*.p12
+*.log
+dist/*.apk.idsig
+dist/galaxy-battery-0.1.0.apk
+dist/galaxy-battery-0.2.0.apk
+dist/galaxy-battery-0.3.0.apk
+dist/*.zip

@@ -1,0 +1,26 @@
+배터리 상태 0.3.1
+
+설치 파일: galaxy-battery-0.3.1.apk
+이전 앱을 지우지 않고 업데이트할 수 있습니다.
+
+1. APK를 휴대폰으로 옮겨 설치합니다.
+2. Shizuku를 설치하고 무선 디버깅 안내에 따라 페어링·시작합니다.
+   공식 사이트: https://shizuku.rikka.app/download/
+3. 갤럭시 배터리 앱에서 '배터리 상태 확인'을 누릅니다.
+4. 처음 표시되는 Shizuku 권한 요청을 허용합니다.
+5. 다음부터는 같은 버튼으로 조회합니다.
+
+재부팅 후에는 Shizuku를 다시 시작해야 할 수 있습니다.
+이 펌웨어에서 상세 값이 공개되지 않으면 '로그 불러오기'를 이용하세요.
+
+SysDump 파일 분석:
+삼성 전화 *#9900# → Run dumpstate/logcat → Copy to sdcard
+앱의 '로그 불러오기' → 내부 저장소 log 폴더의 최신 dumpstate 파일 선택
+
+진단이 필요하면 '측정 근거 · 결과 공유' → '복사'로 결과만 전달하세요.
+전체 덤프 파일을 공유할 필요는 없습니다.
+
+Kotlin 소스 수정:
+PC에서 '배터리 상태.code-workspace'를 Visual Studio Code로 엽니다.
+app/src/main/java/kr/local/galaxybattery/MainActivity.kt에서 화면을 수정합니다.
+Ctrl+Shift+B로 새 APK를 빌드합니다.
