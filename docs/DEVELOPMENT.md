@@ -10,6 +10,11 @@
 
 | 파일 | 역할 |
 |---|---|
+| [ChargeMonitorService.kt](../app/src/main/java/kr/local/galaxybattery/ChargeMonitorService.kt) | 5초 간격 화면 꺼짐 측정, 전면 서비스, Live Update 현재 W 칩, CPU 깨우기 잠금 정리 |
+| [ChargePower.kt](../app/src/main/java/kr/local/galaxybattery/ChargePower.kt) | µA·mV에서 W 계산, 미지원 값 검증, 충전 최고·최저 집계 |
+| [PowerSampler.kt](../app/src/main/java/kr/local/galaxybattery/PowerSampler.kt) | Android 전류·전압·잔량·온도 읽기 |
+| [PowerLogStore.kt](../app/src/main/java/kr/local/galaxybattery/PowerLogStore.kt) | 측정별 전력 기록 영구 저장, 중단된 마지막 쓰기 복구, 열람·삭제 |
+| [PowerGraphView.kt](../app/src/main/java/kr/local/galaxybattery/PowerGraphView.kt) | Canvas 전력 그래프와 터치로 시점 선택 |
 | [HistoryStore.kt](../app/src/main/java/kr/local/galaxybattery/HistoryStore.kt) | 조회 결과의 기기 내 영구 저장, 날짜순 읽기, 개별·전체 삭제 |
 | [MainActivity.kt](../app/src/main/java/kr/local/galaxybattery/MainActivity.kt) | 화면, 문구, 색상, 버튼, 파일 선택, 2초 간격 조회, 결과 표시 |
 | [ShizukuReader.kt](../app/src/main/java/kr/local/galaxybattery/ShizukuReader.kt) | Shizuku 연결, 권한 요청, 서비스 연결, 시간 제한 및 정리 |
@@ -27,7 +32,7 @@
 
 1. 저장소를 clone하거나 **Code → Download ZIP**으로 내려받아 압축을 풉니다.
 2. Android Studio의 **Open**에서 `settings.gradle.kts`가 있는 최상위 폴더를 선택합니다.
-3. Gradle JDK를 **JDK 17**로 설정하고, Android SDK Platform 35와 Build Tools 35.0.0을 준비합니다.
+3. Gradle JDK를 **JDK 17**로 설정하고, Android SDK Platform 36과 Build Tools 35.0.0을 준비합니다.
 4. Gradle 동기화를 마친 뒤 `:app:assembleDebug`를 실행합니다.
 
 터미널에서도 실행할 수 있습니다.
@@ -47,7 +52,7 @@
 | Android Gradle Plugin | 8.9.2 |
 | Gradle Wrapper | 8.11.1 |
 | JDK | 17 |
-| compileSdk / targetSdk | 35 / 35 |
+| compileSdk / targetSdk | 36 / 35 |
 | minSdk | 26 |
 | Shizuku API | 13.1.5 |
 
@@ -69,7 +74,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 이후 소스만 수정했다면 `build.ps1`만 다시 실행하면 됩니다.
 
-- APK: `dist/galaxy-battery-0.3.3.apk`
+- APK: `dist/galaxy-battery-0.4.0.apk`
 - 체크섬: `dist/SHA256SUMS.txt`
 - 로컬 서명키: `.tools/diagnostic.keystore`
 
@@ -94,6 +99,7 @@ PowerShell 빌드는 다음 검증을 실행합니다.
 - [BatteryValuesTest.java](../tests/BatteryValuesTest.java): 기본 값 처리 21개
 - [DumpParserTest.java](../tests/DumpParserTest.java): 로그 분석 35개
 - [HistoryStoreTest.java](../tests/HistoryStoreTest.java): 재실행 후 유지, 정렬, 저장 실패, 개별·전체 삭제 등 11개
+- [PowerLogTest.java](../tests/PowerLogTest.java): W 계산, 부호·미지원 값, 최고·최저, 기록 재열람·부분 쓰기 복구·삭제 등 33개
 - APK 서명·정렬·매니페스트 확인
 
 테스트는 별도 JVM 실행기이며 Gradle의 `test` 작업에 연결되어 있지 않습니다. Android 화면 동작, Shizuku 권한 창, 실제 삼성 펌웨어의 응답은 실기기에서 별도로 확인해야 합니다.
@@ -101,6 +107,16 @@ PowerShell 빌드는 다음 검증을 실행합니다.
 로그 분석은 최대 90초, 압축 해제 후 512 MiB까지 읽으며, 긴 한 줄은 64 KiB를 넘으면 제외합니다. ZIP 내부 파일은 최대 2,048개로 제한하고 중첩 압축을 재귀 분석하지 않습니다. 원본 로그 전체를 보관하지 않고 지정된 배터리 필드만 추출합니다.
 
 수치 해석을 바꿀 때는 ASOC/BSOH와 잔량·상태 코드의 차이를 유지하고, 누락·미지원·충돌값이 정상 수치로 표시되지 않는지 확인하세요.
+
+## 전력 측정과 Live Update 구현
+
+API 36의 `setShortCriticalText()`에 현재 W만 전달하고, `android.requestPromotedOngoing` extras로 승격을 요청합니다. 이 키는 AndroidX의 `setRequestPromotedOngoing()`과 같은 키이며, framework setter는 36.1 API라 직접 호출하지 않습니다. `POST_PROMOTED_NOTIFICATIONS`를 선언하고, 표준 스타일·ongoing·LOW 채널을 사용합니다. UI의 상단바 설정에서 허용 여부와 실제 `FLAG_PROMOTED_ONGOING` 상태를 확인합니다. 승격 여부는 OEM과 시스템 설정이 결정합니다.
+
+사용자가 시작한 측정은 `specialUse` foreground service에서 실행합니다. 부분 wake lock은 화면을 켜지 않고 CPU만 유지하며, timeout과 갱신, 종료 시 해제를 적용했습니다. 측정에는 Shizuku가 필요하지 않습니다. 알림 종료 작업과 dismiss intent는 측정을 종료합니다. 화면이 꺼져도 약 5초 간격으로 32바이트의 측정 샘플을 앱 내부에 추가 저장하며, 모델 원본 덤프나 외부 저장소를 사용하지 않습니다.
+
+시스템 재시작으로 서비스가 복구되면 이전 세션을 다시 읽어 누적 최고·최저를 유지합니다. 강제 종료와 재부팅 이후에는 자동으로 시작하지 않습니다. 마지막 쓰기가 중단되면 완전한 샘플까지만 읽고 다음 추가 저장 시 불완전한 꼬리를 잘라냅니다. 현재 측정 중인 세션 삭제는 거부하며, 최저 값에는 충전 중 유효한 0W를 포함합니다. 그래프는 최근 최대 600개만 메모리에 유지하지만 최고·최저는 전체 샘플 기준입니다.
+
+실기기 검증 항목: 알림 권한 거부/허용, One UI Live Update 승격, 화면 꺼짐 상태에서 5초 기록, 측정 종료 후 wake lock 해제, 음수 전류 기기에서의 표시, 앱 재실행 후 기록 열람과 삭제.
 
 ## 버전 배포 시 갱신할 곳
 

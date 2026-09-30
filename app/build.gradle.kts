@@ -5,13 +5,13 @@ plugins {
 
 android {
     namespace = "kr.local.galaxybattery"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "kr.local.galaxybattery"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.3.3"
+        versionCode = 7
+        versionName = "0.4.0"
     }
     // The tiny generated Binder interface is checked in: native aidl cannot handle
     // all Unicode Windows paths. Keep its source .aidl as the contract.

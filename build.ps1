@@ -14,9 +14,9 @@ if (!$JdkPath) {
 }
 if (!$SdkPath) { $SdkPath = Join-Path $projectRoot '.tools/sdk' }
 if (!$BuildToolsPath) { $BuildToolsPath = Join-Path $SdkPath 'android-15' }
-$androidJar = Join-Path $SdkPath 'android-35/android.jar'
-if (!(Test-Path $androidJar)) { $androidJar = Join-Path $SdkPath 'platforms/android-35/android.jar' }
-if (!(Test-Path $androidJar)) { throw 'Android platform 35 is missing.' }
+$androidJar = Join-Path $SdkPath 'android-36/android.jar'
+if (!(Test-Path $androidJar)) { $androidJar = Join-Path $SdkPath 'platforms/android-36/android.jar' }
+if (!(Test-Path $androidJar)) { throw 'Android platform 36 is missing. Run setup-tools.ps1.' }
 $java = Join-Path $JdkPath 'bin/java.exe'
 $javac = Join-Path $JdkPath 'bin/javac.exe'
 $jar = Join-Path $JdkPath 'bin/jar.exe'
@@ -43,10 +43,10 @@ foreach ($folder in @('classes', 'test-classes', 'generated', 'dex')) {
 }
 $valueSource = Join-Path $sourceRoot 'java/kr/local/galaxybattery/BatteryValues.kt'
 $parserSource = Join-Path $sourceRoot 'java/kr/local/galaxybattery/DumpParser.kt'
-& $java -cp "$compilerLib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -jvm-target 1.8 -classpath $stdlib -d "$build/test-classes" $valueSource $parserSource "$sourceRoot/java/kr/local/galaxybattery/HistoryStore.kt"
+& $java -cp "$compilerLib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -jvm-target 1.8 -classpath $stdlib -d "$build/test-classes" $valueSource $parserSource "$sourceRoot/java/kr/local/galaxybattery/HistoryStore.kt" "$sourceRoot/java/kr/local/galaxybattery/ChargePower.kt" "$sourceRoot/java/kr/local/galaxybattery/PowerLogStore.kt"
 Check-Exit 'Kotlin parser compilation'
 $testClasspath = "$build/test-classes;$stdlib"
-& $javac -encoding UTF-8 --release 8 -classpath $testClasspath -d "$build/test-classes" "$projectRoot/tests/BatteryValuesTest.java" "$projectRoot/tests/DumpParserTest.java" "$projectRoot/tests/HistoryStoreTest.java"
+& $javac -encoding UTF-8 --release 8 -classpath $testClasspath -d "$build/test-classes" "$projectRoot/tests/BatteryValuesTest.java" "$projectRoot/tests/DumpParserTest.java" "$projectRoot/tests/HistoryStoreTest.java" "$projectRoot/tests/PowerLogTest.java"
 Check-Exit 'Test compilation'
 & $java -cp $testClasspath BatteryValuesTest
 Check-Exit 'Value validation tests'
@@ -54,6 +54,8 @@ Check-Exit 'Value validation tests'
 Check-Exit 'Dump parsing tests'
 & $java -cp $testClasspath HistoryStoreTest
 Check-Exit 'History persistence tests'
+& $java -cp $testClasspath PowerLogTest
+Check-Exit 'Power measurement and logging tests'
 
 & "$BuildToolsPath/aapt2.exe" compile --dir 'app/src/main/res' -o 'build/resources.zip'
 Check-Exit 'Resource compilation'
@@ -92,16 +94,16 @@ if (!(Test-Path $keystore)) {
     & $keytool -genkeypair -keystore $keystore -storepass android -keypass android -alias diagnostic -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Galaxy Battery Local Diagnostic'
     Check-Exit 'Local signing key creation'
 }
-$apk = Join-Path $dist 'galaxy-battery-0.3.3.apk'
+$apk = Join-Path $dist 'galaxy-battery-0.4.0.apk'
 & $java -jar "$BuildToolsPath/lib/apksigner.jar" sign --ks $keystore --ks-key-alias diagnostic --ks-pass pass:android --key-pass pass:android --out $apk "$build/aligned.apk"
 Check-Exit 'APK signing'
 & $java -jar "$BuildToolsPath/lib/apksigner.jar" verify --verbose $apk
 Check-Exit 'APK signature verification'
-& "$BuildToolsPath/zipalign.exe" -c -p 4 'dist/galaxy-battery-0.3.3.apk'
+& "$BuildToolsPath/zipalign.exe" -c -p 4 'dist/galaxy-battery-0.4.0.apk'
 Check-Exit 'APK alignment verification'
-& "$BuildToolsPath/aapt.exe" dump badging 'dist/galaxy-battery-0.3.3.apk' | Select-String 'package:|sdkVersion|targetSdkVersion|application-label:|launchable-activity:|uses-permission'
+& "$BuildToolsPath/aapt.exe" dump badging 'dist/galaxy-battery-0.4.0.apk' | Select-String 'package:|sdkVersion|targetSdkVersion|application-label:|launchable-activity:|uses-permission'
 Check-Exit 'APK manifest inspection'
 $hash = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
-"$hash  galaxy-battery-0.3.3.apk" | Set-Content "$dist/SHA256SUMS.txt" -Encoding Ascii
+"$hash  galaxy-battery-0.4.0.apk" | Set-Content "$dist/SHA256SUMS.txt" -Encoding Ascii
 Write-Output "APK ready: $apk"
 } finally { Pop-Location }

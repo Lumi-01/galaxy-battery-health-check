@@ -15,7 +15,7 @@ Expand-Archive "$toolsDir/kotlin.zip" "$toolsDir/kotlin" -Force
 Download 'https://dl.google.com/dl/android/maven2/com/android/tools/r8/8.9.35/r8-8.9.35.jar' "$toolsDir/r8-8.9.35.jar"
 Download 'https://dl.google.com/android/repository/repository2-3.xml' "$toolsDir/repository.xml"
 [xml]$repo = Get-Content "$toolsDir/repository.xml"
-foreach ($pkgId in @('build-tools;35.0.0', 'platforms;android-35', 'platform-tools')) {
+foreach ($pkgId in @('build-tools;35.0.0', 'platforms;android-36', 'platform-tools')) {
     $pkg = $repo.'sdk-repository'.remotePackage | Where-Object path -eq $pkgId
     $archive = $pkg.archives.archive | Where-Object { !$_.'host-os' -or $_.'host-os' -eq 'windows' } | Select-Object -First 1
     if (!$archive) { throw "Package unavailable: $pkgId" }
