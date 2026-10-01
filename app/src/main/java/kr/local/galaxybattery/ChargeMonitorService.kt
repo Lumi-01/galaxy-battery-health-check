@@ -2,18 +2,33 @@ package kr.local.galaxybattery
 
 import android.app.*
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.os.*
 import java.io.File
 import java.util.ArrayDeque
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ScheduledFuture
 
 /** User-started foreground measurement. The screen remains off while the CPU samples. */
 class ChargeMonitorService : Service() {
     private val worker = Executors.newSingleThreadScheduledExecutor()
     private val store by lazy { PowerLogStore(File(noBackupFilesDir, "power-history")) }
     private val preferences by lazy { getSharedPreferences("power-monitor", MODE_PRIVATE) }
+    private val settings by lazy { AppSettings(this) }
+    @Volatile private var nextSample: ScheduledFuture<*>? = null
+    private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (initialized && !stopping && !worker.isShutdown) worker.execute {
+            if (stopping) return@execute
+            if (key == AppSettings.POWER_INTERVAL) {
+                nextSample?.cancel(false)
+                sampleAndSchedule()
+            } else if (key == AppSettings.SHOW_DISCHARGE) {
+                getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(snapshot.samples.lastOrNull()))
+            }
+        }
+    }
     private var wakeLock: PowerManager.WakeLock? = null
     private var wakeRenewed = 0L
     @Volatile private var stopping = false
@@ -24,6 +39,7 @@ class ChargeMonitorService : Service() {
     private var minimum: Double? = null
     private var maximum: Double? = null
     private val points = ArrayDeque<ChargePower.Sample>()
+    private val zero = ZeroPowerTracker()
 
     override fun onBind(intent: Intent?) = null
 
@@ -35,6 +51,7 @@ class ChargeMonitorService : Service() {
         }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         wakeLock = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:power-monitor").apply { setReferenceCounted(false) }
+        settings.preferences.registerOnSharedPreferenceChangeListener(settingsListener)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -61,6 +78,7 @@ class ChargeMonitorService : Service() {
                 if (recovered != null && recovered.ended == 0L) {
                     sessionId = recovered.id; started = recovered.started; count = recovered.count
                     minimum = recovered.minimum; maximum = recovered.maximum; points.addAll(recovered.samples)
+                    zero.restore(recovered.zeroState)
                 } else {
                     if (savedId != null) try { store.finish(savedId, System.currentTimeMillis()) } catch (_: Exception) {}
                     started = System.currentTimeMillis(); sessionId = store.create(started)
@@ -68,8 +86,14 @@ class ChargeMonitorService : Service() {
                 preferences.edit().putString("session", sessionId).commit()
             } catch (_: Exception) { fail("기록을 시작하지 못했어요. 저장 공간을 확인해 주세요.") }
         }
-        worker.scheduleWithFixedDelay({ sample() }, 0L, 5L, TimeUnit.SECONDS)
+        worker.execute { sampleAndSchedule() }
         return START_STICKY
+    }
+
+    /** Read the saved interval each cycle; setting changes reschedule without a new session. */
+    private fun sampleAndSchedule() {
+        sample()
+        if (!stopping) nextSample = worker.schedule({ sampleAndSchedule() }, settings.powerSeconds.toLong(), TimeUnit.SECONDS)
     }
 
     private fun sample() {
@@ -82,12 +106,13 @@ class ChargeMonitorService : Service() {
             store.append(sessionId ?: return, value)
             if (stopping) return
             count++
+            zero.add(value)
             points.addLast(value); if (points.size > 600) points.removeFirst()
             value.chargingWatts()?.let { watts ->
                 minimum = minimum?.let { minOf(it, watts) } ?: watts
                 maximum = maximum?.let { maxOf(it, watts) } ?: watts
             }
-            snapshot = Snapshot(true, sessionId, started, count, minimum, maximum, points.toList())
+            snapshot = Snapshot(true, sessionId, started, count, minimum, maximum, points.toList(), zeroState = zero.state())
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(value))
         } catch (_: Exception) { fail("측정이 중단됐어요. 저장 공간과 앱 실행 설정을 확인해 주세요.") }
     }
@@ -108,9 +133,10 @@ class ChargeMonitorService : Service() {
     }
 
     private fun notification(value: ChargePower.Sample?): Notification {
-        val watts = value?.chargingWatts()
+        val watts = ChargePower.liveWatts(value, settings.showDischarge)
         val title = when {
             value == null -> "충전 전력 측정 중"
+            watts != null && watts < 0 -> "방전 ${ChargePower.text(watts)}"
             value.plugged == 0 -> "충전기 연결 대기"
             watts == null -> "충전 전력 확인 중"
             else -> ChargePower.text(watts)
@@ -128,7 +154,7 @@ class ChargeMonitorService : Service() {
         if (Build.VERSION.SDK_INT >= 36) {
             // Same extras key as NotificationCompat.setRequestPromotedOngoing; the
             // framework setter is a 36.1 API, while the chip text API is available in 36.
-            builder.addExtras(Bundle().apply { putBoolean("android.requestPromotedOngoing", value?.plugged != 0 && watts != null) })
+            builder.addExtras(Bundle().apply { putBoolean("android.requestPromotedOngoing", watts != null) })
             builder.setShortCriticalText(ChargePower.chip(watts))
         }
         return builder.build()
@@ -140,13 +166,16 @@ class ChargeMonitorService : Service() {
             wakeLock?.let { if (it.isHeld) it.release() }
         }
         worker.shutdown()
+        nextSample?.cancel(false)
+        settings.preferences.unregisterOnSharedPreferenceChangeListener(settingsListener)
         snapshot = snapshot.copy(active = false)
         super.onDestroy()
     }
 
     data class Snapshot(val active: Boolean = false, val id: String? = null, val started: Long = 0L,
                         val count: Long = 0L, val minimum: Double? = null, val maximum: Double? = null,
-                        val samples: List<ChargePower.Sample> = emptyList(), val error: String? = null)
+                        val samples: List<ChargePower.Sample> = emptyList(), val error: String? = null,
+                        val zeroState: ZeroPowerTracker.State = ZeroPowerTracker().state())
     companion object {
         @Volatile var snapshot = Snapshot(); private set
         fun forgetDeleted(ids: List<String>) {

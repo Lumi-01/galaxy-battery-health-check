@@ -15,6 +15,7 @@ class ShizukuReader(activity: Activity, private val callback: Callback) {
     interface Callback {
         fun status(message: String)
         fun result(fields: String)
+        fun failure(message: String)
     }
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
@@ -32,13 +33,17 @@ class ShizukuReader(activity: Activity, private val callback: Callback) {
 
     private val received = Shizuku.OnBinderReceivedListener { main.post { connectionStatus() } }
     private val died = Shizuku.OnBinderDeadListener { main.post {
-        if (!closed) finish("연결이 끊겼어요. Shizuku를 시작한 뒤 다시 확인해 주세요.")
+        if (!closed) {
+            val attempted = busy || waitingPermission
+            finish("연결이 끊겼어요. Shizuku를 시작한 뒤 다시 확인해 주세요.")
+            if (attempted) callback.failure("조회 중 Shizuku 연결이 끊겼어요. Shizuku를 다시 시작해 주세요.")
+        }
     } }
     private val permission = Shizuku.OnRequestPermissionResultListener { code, result -> main.post {
         if (!closed && code == REQUEST && waitingPermission) {
             waitingPermission = false
             if (result == PackageManager.PERMISSION_GRANTED) query()
-            else callback.status("권한이 필요해요. Shizuku의 ‘승인된 앱’에서 이 앱을 허용해 주세요.")
+            else failed("권한이 필요해요. Shizuku의 ‘승인된 앱’에서 배터리 상태를 허용해 주세요.")
         }
     } }
 
@@ -56,15 +61,15 @@ class ShizukuReader(activity: Activity, private val callback: Callback) {
                     diagnostic = value.take(4096)
                     finish("배터리 기록을 확인했어요.")
                     when {
-                        value.startsWith("ERROR:") -> callback.status("지금은 정보를 읽을 수 없어요. Shizuku 연결을 확인하거나 배터리 로그를 불러와 주세요.")
-                        value.startsWith("NO_FIELDS") -> callback.status("이 기기는 배터리 로그가 필요해요. ‘로그 불러오기’로 SysDump 파일을 선택해 주세요.")
+                        value.startsWith("ERROR:") -> failed("연결했지만 정보를 읽지 못했어요. Shizuku를 다시 시작하거나 배터리 로그를 불러와 주세요.")
+                        value.startsWith("NO_FIELDS") -> callback.status("Shizuku 연결은 확인됐지만 기기에서 진단 값을 제공하지 않았어요. ‘로그 불러오기’로 SysDump 파일을 선택해 주세요.")
                         else -> callback.result(value)
                     }
                 }
             }
         } }
         override fun onServiceDisconnected(name: ComponentName) { main.post {
-            if (!closed && busy) finish("조회 중 연결이 끊겼어요. 다시 확인해 주세요.")
+            if (!closed && busy) failed("조회 중 연결이 끊겼어요. 다시 확인해 주세요.")
         } }
     }
 
@@ -84,13 +89,13 @@ class ShizukuReader(activity: Activity, private val callback: Callback) {
     fun query() {
         if (closed || busy || waitingPermission) return
         try {
-            if (!Shizuku.pingBinder()) { connectionStatus(); return }
+            if (!Shizuku.pingBinder()) { failed("Shizuku가 실행 중이지 않아요. Shizuku에서 페어링 후 ‘시작’을 누르고 다시 확인해 주세요."); return }
             if (Shizuku.isPreV11() || Shizuku.getVersion() < 12) {
-                callback.status("Shizuku를 최신 버전으로 업데이트해 주세요."); return
+                failed("Shizuku를 최신 버전으로 업데이트해 주세요."); return
             }
             if (Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
                 if (Shizuku.shouldShowRequestPermissionRationale()) {
-                    callback.status("Shizuku의 ‘승인된 앱’에서 갤럭시 배터리를 허용해 주세요.")
+                    failed("Shizuku의 ‘승인된 앱’에서 배터리 상태를 허용해 주세요.")
                 } else {
                     waitingPermission = true
                     callback.status("권한 안내가 열리면 ‘허용’을 선택해 주세요.")
@@ -102,15 +107,20 @@ class ShizukuReader(activity: Activity, private val callback: Callback) {
             val current = ++generation
             callback.status("배터리 정보에 연결하고 있어요…")
             timeout = Runnable {
-                if (!closed && busy && generation == current) finish("응답이 늦어지고 있어요. Shizuku를 확인한 뒤 다시 시도해 주세요.")
+                if (!closed && busy && generation == current) failed("Shizuku 연결 검증 시간이 초과됐어요. 실행 상태와 앱 권한을 확인한 뒤 다시 시도해 주세요.")
             }.also { main.postDelayed(it, 25000) }
             bound = true
             Shizuku.bindUserService(args, connection)
         } catch (e: RuntimeException) {
             waitingPermission = false
             diagnostic = "ERROR: ${e.javaClass.simpleName}"
-            finish("Shizuku에 연결하지 못했어요. 실행 상태와 앱 권한을 확인해 주세요.")
+            failed("Shizuku에 연결하지 못했어요. 실행 상태와 앱 권한을 확인해 주세요.")
         }
+    }
+
+    private fun failed(message: String) {
+        finish(message)
+        if (!closed) callback.failure(message)
     }
 
     private fun finish(message: String) {

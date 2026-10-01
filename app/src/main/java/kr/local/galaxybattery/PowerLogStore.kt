@@ -7,7 +7,8 @@ import java.util.UUID
 /** Append-only sessions; fixed-size samples survive an interrupted final write. */
 class PowerLogStore(private val directory: File) {
     data class Session(val id: String, val started: Long, val ended: Long, val count: Long,
-                       val minimum: Double?, val maximum: Double?, val samples: List<ChargePower.Sample>)
+                       val minimum: Double?, val maximum: Double?, val samples: List<ChargePower.Sample>,
+                       val zeroState: ZeroPowerTracker.State, val peakThermal: Int)
 
     @Throws(IOException::class)
     fun create(time: Long): String = synchronized(lock) {
@@ -24,13 +25,14 @@ class PowerLogStore(private val directory: File) {
         val target = file(id)
         if (!target.isFile) throw IOException("Power session missing")
         RandomAccessFile(target, "rw").use { out ->
-            checkHeader(out)
+            val record = checkHeader(out)
             out.seek(12)
             if (out.readLong() != 0L) throw IOException("Session already ended")
-            val safeLength = HEADER + ((out.length() - HEADER) / RECORD) * RECORD
+            val safeLength = HEADER + ((out.length() - HEADER) / record) * record
             out.setLength(safeLength); out.seek(safeLength)
             out.writeLong(sample.time); out.writeInt(sample.currentUa); out.writeInt(sample.voltageMv)
             out.writeInt(sample.level); out.writeInt(sample.temperature); out.writeInt(sample.status); out.writeInt(sample.plugged)
+            if (record == RECORD) out.writeInt(sample.thermalStatus)
             out.fd.sync()
         }
     }
@@ -47,17 +49,21 @@ class PowerLogStore(private val directory: File) {
         require(limit in 0..3600)
         val points = ArrayDeque<ChargePower.Sample>()
         val stats = ChargePower.Stats()
+        val zero = ZeroPowerTracker()
+        var peakThermal = -1
         RandomAccessFile(file(id), "r").use { input ->
-            checkHeader(input)
+            val record = checkHeader(input)
             val started = input.readLong(); val ended = input.readLong()
-            val count = (input.length() - HEADER) / RECORD
+            val count = (input.length() - HEADER) / record
             repeatLong(count) {
                 val sample = ChargePower.Sample(input.readLong(), input.readInt(), input.readInt(), input.readInt(),
-                    input.readInt(), input.readInt(), input.readInt())
+                    input.readInt(), input.readInt(), input.readInt(), if (record == RECORD) input.readInt() else -1)
                 stats.add(sample)
+                zero.add(sample)
+                if (sample.thermalStatus in 0..6) peakThermal = maxOf(peakThermal, sample.thermalStatus)
                 if (limit > 0) { points.addLast(sample); if (points.size > limit) points.removeFirst() }
             }
-            Session(id, started, ended, count, stats.minimum, stats.maximum, points.toList())
+            Session(id, started, ended, count, stats.minimum, stats.maximum, points.toList(), zero.state(), peakThermal)
         }
     }
 
@@ -79,9 +85,14 @@ class PowerLogStore(private val directory: File) {
         require(id.matches(Regex("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")))
         return File(directory, "$id.power")
     }
-    private fun checkHeader(input: RandomAccessFile) {
-        if (input.length() < HEADER || input.readInt() != MAGIC) throw IOException("Invalid power session")
+    private fun checkHeader(input: RandomAccessFile): Long {
+        if (input.length() < HEADER) throw IOException("Invalid power session")
+        return when (input.readInt()) {
+            MAGIC -> RECORD
+            0x47504231 -> 32L // v0.4 logs contain no thermal field; keep reading and appending safely.
+            else -> throw IOException("Invalid power session")
+        }
     }
     private inline fun repeatLong(count: Long, action: () -> Unit) { var n = 0L; while (n++ < count) action() }
-    companion object { private val lock = Any(); private const val MAGIC = 0x47504231; private const val HEADER = 20L; private const val RECORD = 32L }
+    companion object { private val lock = Any(); private const val MAGIC = 0x47504232; private const val HEADER = 20L; private const val RECORD = 36L }
 }

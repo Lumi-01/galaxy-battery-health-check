@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:versionCode="7" android:versionName="0.4.0">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" android:versionCode="8" android:versionName="0.5.0">
     <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="35" />
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <queries><package android:name="moe.shizuku.privileged.api" /></queries>
-    <application android:label="배터리 상태" android:theme="@style/AppTheme" android:icon="@drawable/ic_battery" android:allowBackup="false" android:supportsRtl="true">
+    <application android:label="배터리 상태" android:theme="@style/AppTheme" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:allowBackup="false" android:supportsRtl="true">
         <meta-data android:name="moe.shizuku.client.V3_SUPPORT" android:value="true" />
         <service android:name=".ChargeMonitorService" android:exported="false" android:foregroundServiceType="specialUse">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="User-started battery charging power measurement with persistent local samples while screen is off, stopped by the user." />

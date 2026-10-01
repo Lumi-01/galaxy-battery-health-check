@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.os.Build
+import android.os.PowerManager
 
 object PowerSampler {
     fun read(context: Context): ChargePower.Sample {
@@ -16,6 +18,10 @@ object PowerSampler {
             BatteryValues.percent(battery?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1), battery?.getIntExtra(BatteryManager.EXTRA_SCALE, -1)) ?: -1,
             battery?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, ChargePower.MISSING) ?: ChargePower.MISSING,
             battery?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1,
-            battery?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0)
+            battery?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0,
+            thermalStatus(context))
     }
+    private fun thermalStatus(context: Context): Int = if (Build.VERSION.SDK_INT >= 29) try {
+        context.getSystemService(PowerManager::class.java)?.currentThermalStatus?.takeIf { it in 0..6 } ?: -1
+    } catch (_: RuntimeException) { -1 } else -1
 }

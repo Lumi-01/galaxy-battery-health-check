@@ -10,11 +10,13 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.ceil
 
-class PowerGraphView(context: Context) : View(context) {
+class PowerGraphView(context: Context, private val palette: AppPalette = AppPalette.forDark(AppSettings(context).isDark(context))) : View(context) {
     private var samples: List<ChargePower.Sample> = emptyList()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val density = resources.displayMetrics.density
     private var selected: ChargePower.Sample? = null
+    private var touchX = 0f
+    private var touchY = 0f
     var onSelection: ((ChargePower.Sample) -> Unit)? = null
     fun setSamples(values: List<ChargePower.Sample>) {
         if (samples == values) return
@@ -35,16 +37,16 @@ class PowerGraphView(context: Context) : View(context) {
         val end = maxOf(start + 1000, samples.lastOrNull()?.time ?: 1000L)
         fun x(time: Long) = left + ((time - start).toDouble() / (end - start) * (right - left)).toFloat()
         fun y(watts: Double) = bottom - ((watts - minimum) / (maximum - minimum) * (bottom - top)).toFloat()
-        paint.textSize = 10f * resources.displayMetrics.scaledDensity
+        paint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 10f, resources.displayMetrics)
         paint.strokeWidth = density
         for (step in 0..4) {
             val value = minimum + (maximum - minimum) * step / 4.0
-            paint.color = Color.rgb(44, 58, 69)
+            paint.color = palette.grid
             canvas.drawLine(left, y(value), right, y(value), paint)
-            paint.color = Color.rgb(148, 167, 181)
+            paint.color = palette.muted
             canvas.drawText(String.format(Locale.US, "%.0fW", value), 0f, y(value) + 4 * density, paint)
         }
-        paint.color = Color.rgb(148, 167, 181)
+        paint.color = palette.muted
         if (samples.isNotEmpty()) {
             val format = SimpleDateFormat("HH:mm", Locale.KOREA)
             canvas.drawText(format.format(Date(start)), left, height - 6 * density, paint)
@@ -52,23 +54,24 @@ class PowerGraphView(context: Context) : View(context) {
             canvas.drawText(last, right - paint.measureText(last), height - 6 * density, paint)
         }
         if (valid.isEmpty()) {
-            paint.textSize = 13f * resources.displayMetrics.scaledDensity
+            paint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 13f, resources.displayMetrics)
             val text = if (samples.isEmpty()) "측정하면 그래프가 여기에 나타나요" else "기기에서 유효한 전류 값을 제공하지 않아요"
             canvas.drawText(text, left + 8 * density, (top + bottom) / 2, paint)
             return
         }
         paint.strokeWidth = 2.5f * density
         paint.strokeCap = Paint.Cap.ROUND
+        val gap = RefreshPolicy.graphGapMs(samples.map { it.time })
         samples.zipWithNext().forEach { (a, b) ->
             val aw = a.watts(); val bw = b.watts()
-            if (aw != null && bw != null && b.time - a.time in 1..15000) {
-                paint.color = if (bw >= 0) Color.rgb(115, 235, 195) else Color.rgb(115, 178, 246)
+            if (aw != null && bw != null && b.time - a.time in 1..gap) {
+                paint.color = if (bw >= 0) palette.accent else palette.negative
                 canvas.drawLine(x(a.time), y(aw), x(b.time), y(bw), paint)
             }
         }
         val point = selected ?: samples.lastOrNull { it.watts() != null }
         point?.let { sample -> sample.watts()?.let { w ->
-            paint.color = Color.rgb(115, 235, 195)
+            paint.color = palette.accent
             if (selected != null) { paint.strokeWidth = density; canvas.drawLine(x(sample.time), top, x(sample.time), bottom, paint) }
             canvas.drawCircle(x(sample.time), y(w), 4f * density, paint)
         } }
@@ -77,7 +80,12 @@ class PowerGraphView(context: Context) : View(context) {
         if (samples.isEmpty()) return super.onTouchEvent(event)
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                parent?.requestDisallowInterceptTouchEvent(true)
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    touchX = event.x; touchY = event.y
+                } else if (abs(event.x - touchX) > abs(event.y - touchY)) {
+                    // Horizontal scrubbing selects samples; vertical swipes can scroll the page.
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                }
                 val fraction = ((event.x - 44 * density) / (width - 56 * density)).coerceIn(0f, 1f)
                 val target = samples.first().time + ((samples.last().time - samples.first().time) * fraction).toLong()
                 samples.minByOrNull { abs(it.time - target) }?.let { selected = it; onSelection?.invoke(it) }

@@ -9,6 +9,7 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
@@ -24,6 +25,21 @@ import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
+    private val settings by lazy { AppSettings(this) }
+    private val palette by lazy { AppPalette.forDark(settings.isDark(this)) }
+    private val BG get() = palette.background
+    private val CARD get() = palette.card
+    private val FG get() = palette.foreground
+    private val MUTED get() = palette.muted
+    private val GREEN get() = palette.accent
+    private lateinit var dashboard: DashboardScaffold
+    private lateinit var recordsContainer: LinearLayout
+    private lateinit var thermalView: ThermalStatusView
+    private lateinit var zeroView: TextView
+    private val previewZero = ZeroPowerTracker()
+    private var historyCategory = 0
+    private var recordsGeneration = 0
+
     private lateinit var levelView: TextView
     private lateinit var statusView: TextView
     private lateinit var cycleView: TextView
@@ -64,14 +80,24 @@ class MainActivity : Activity() {
         override fun run() {
             if (!registered || isFinishing || isDestroyed) return
             render(registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)))
-            refreshHandler.postDelayed(this, 2000)
+            refreshHandler.postDelayed(this, settings.batterySeconds * 1000L)
         }
     }
     private val receiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) = render(intent)
+        override fun onReceive(context: Context, intent: Intent) { lastBattery = intent }
+    }
+
+    private val powerRefresh = object : Runnable {
+        override fun run() {
+            if (!registered || isFinishing || isDestroyed) return
+            renderPower()
+            refreshHandler.postDelayed(this, settings.powerSeconds * 1000L)
+        }
     }
 
     override fun onCreate(state: Bundle?) {
+        val style = if (settings.isDark(this)) "AppTheme" else "AppTheme.Light"
+        setTheme(resources.getIdentifier(style, "style", packageName))
         super.onCreate(state)
         state?.getString("fields")?.let {
             detailed = DumpParser.parse(it.byteInputStream())
@@ -79,8 +105,18 @@ class MainActivity : Activity() {
             detailedTime = state.getString("readTime", "")
         }
         buildUi()
+        historyCategory = state?.getInt("historyCategory", 0) ?: 0
+        dashboard.select(state?.getInt("page", 0) ?: 0)
         shizuku = ShizukuReader(this, object : ShizukuReader.Callback {
             override fun status(message: String) { advancedStatus.text = message }
+            override fun failure(message: String) {
+                if (isDestroyed || isFinishing) return
+                AlertDialog.Builder(this@MainActivity).setTitle("Shizuku 연결을 확인해 주세요")
+                    .setMessage(message + "\n\nShizuku가 실행 중인지, 이 앱의 권한을 허용했는지 확인한 뒤 다시 조회하세요.")
+                    .setPositiveButton("연결 안내") { _, _ -> showShizukuHelp() }
+                    .setNeutralButton("로그 불러오기") { _, _ -> pickDump() }
+                    .setNegativeButton("닫기", null).show()
+            }
             override fun result(fields: String) {
                 try { setDetailed(DumpParser.parse(fields.byteInputStream()), "직접 조회") }
                 catch (_: Exception) { advancedStatus.text = "정보를 해석하지 못했어요. 로그 파일로 다시 확인해 주세요." }
@@ -95,6 +131,8 @@ class MainActivity : Activity() {
             state.putString("source", detailedSource)
             state.putString("readTime", detailedTime)
         }
+        state.putInt("page", dashboard.selected)
+        state.putInt("historyCategory", historyCategory)
         super.onSaveInstanceState(state)
     }
 
@@ -106,17 +144,22 @@ class MainActivity : Activity() {
         registered = true
         render(sticky)
         refreshHandler.removeCallbacks(liveRefresh)
-        refreshHandler.postDelayed(liveRefresh, 2000)
+        refreshHandler.postDelayed(liveRefresh, settings.batterySeconds * 1000L)
+        refreshHandler.removeCallbacks(powerRefresh)
+        renderPower()
+        refreshHandler.postDelayed(powerRefresh, settings.powerSeconds * 1000L)
+        if (dashboard.selected == 2) refreshRecords()
     }
 
     override fun onStop() {
         refreshHandler.removeCallbacks(liveRefresh)
+        refreshHandler.removeCallbacks(powerRefresh)
         if (registered) { unregisterReceiver(receiver); registered = false }
         super.onStop()
     }
 
     override fun onDestroy() {
-        refreshHandler.removeCallbacks(liveRefresh)
+        refreshHandler.removeCallbacksAndMessages(null)
         shizuku?.close()
         fileWorker.shutdownNow()
         historyWorker.shutdown()
@@ -124,27 +167,11 @@ class MainActivity : Activity() {
     }
 
     private fun buildUi() {
-        val scroll = ScrollView(this).apply { isFillViewport = true; setBackgroundColor(BG) }
-        val outer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(26), dp(22), dp(24))
+        dashboard = DashboardScaffold(this, palette, settings.blur, { showSettings() }) {
+            if (it == 2 && ::recordsContainer.isInitialized) refreshRecords()
         }
-        scroll.addView(outer)
-        scroll.setOnApplyWindowInsetsListener { view, insets ->
-            if (Build.VERSION.SDK_INT >= 30) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-                view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-            } else {
-                @Suppress("DEPRECATION")
-                view.setPadding(insets.systemWindowInsetLeft, insets.systemWindowInsetTop, insets.systemWindowInsetRight, insets.systemWindowInsetBottom)
-            }
-            @Suppress("DEPRECATION")
-            insets.consumeSystemWindowInsets()
-        }
-        text(outer, "GALAXY  /  BATTERY", 11, GREEN, true)
-        text(outer, "배터리 상태", 30, FG, true).setPadding(0, dp(10), 0, dp(6))
+        var outer = dashboard.pages[0]
         text(outer, "${Build.MODEL}  ·  Android ${Build.VERSION.RELEASE}", 13, MUTED)
-
         val hero = card(outer)
         text(hero, "현재 잔량", 13, MUTED)
         levelView = text(hero, "—", 44, FG, true)
@@ -155,24 +182,16 @@ class MainActivity : Activity() {
         }
         hero.addView(progress, LinearLayout.LayoutParams(-1, dp(8)).apply { topMargin = dp(18) })
 
-        val power = card(outer)
-        text(power, "충전 전력", 14, MUTED, true)
-        powerView = text(power, "— W", 48, GREEN, true)
-        powerSubtitle = text(power, "배터리로 들어오는 순전력을 확인해요.", 13, MUTED)
-        text(power, "배터리 전압 × 순전류로 계산해요. 충전기 출력과는 차이가 있어요.", 12, MUTED)
-        powerStats = text(power, "최고 — W     최저 — W", 16, FG, true).apply { setPadding(0, dp(14), 0, dp(8)) }
-        text(power, "전력 변화", 14, FG, true)
-        powerGraph = PowerGraphView(this)
-        power.addView(powerGraph, LinearLayout.LayoutParams(-1, dp(200)))
-        graphSelection = text(power, "그래프를 터치하면 그 시점의 값을 볼 수 있어요.", 12, MUTED)
-        powerGraph.onSelection = { graphSelection.text = sampleCaption(it) }
-        monitorStatus = text(power, "측정을 시작하면 화면을 꺼도 5초 간격으로 기록해요.", 13, MUTED)
-        monitorButton = button(power, "측정 시작") { togglePowerRecording() }
-        val powerActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        power.addView(powerActions)
-        smallButton(powerActions, "충전 기록") { showPowerHistory() }
-        smallButton(powerActions, "상단바 설정") { showPowerSettings() }
-
+        val advanced = card(outer)
+        text(advanced, "배터리 정보 불러오기", 18, FG, true)
+        text(advanced, "ASOC·BSOH와 사이클을 읽으려면 Shizuku를 연결해 주세요. 저장한 SysDump 로그도 불러올 수 있어요.", 13, MUTED)
+        advancedStatus = text(advanced, "연결 상태를 확인하고 있어요…", 13, MUTED)
+        button(advanced, "배터리 상태 확인") { if (!importing) shizuku?.query() }
+        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        advanced.addView(actions)
+        smallButton(actions, "연결 설정") { showShizukuHelp() }
+        smallButton(actions, "로그 불러오기") { pickDump() }
+        advancedDetails = text(advanced, "조회 결과는 배터리 진단과 사이클에 표시돼요.", 12, MUTED)
         card(outer).also {
             text(it, "충전 사이클", 14, MUTED)
             cycleView = text(it, "—", 30, FG, true)
@@ -185,30 +204,49 @@ class MainActivity : Activity() {
         }
         card(outer).also {
             text(it, "배터리 상태", 16, FG, true)
-            text(it, "화면을 보는 동안 2초마다 업데이트돼요.", 12, GREEN)
+            text(it, "화면을 보는 동안 ${settings.batterySeconds}초마다 업데이트돼요.", 12, GREEN)
             details = text(it, "", 15, MUTED).apply { setLineSpacing(dp(7).toFloat(), 1f) }
             text(it, "‘정상’은 배터리의 상태 코드예요. 용량 유지율은 별도로 확인해 주세요.", 12, MUTED)
         }
-        val advanced = card(outer)
-        text(advanced, "배터리 정보 불러오기", 18, FG, true)
-        text(advanced, "ASOC·BSOH와 사이클을 읽으려면 Shizuku를 연결해 주세요. 저장한 SysDump 로그도 불러올 수 있어요.", 13, MUTED)
-        advancedStatus = text(advanced, "연결 상태를 확인하고 있어요…", 13, MUTED)
-        button(advanced, "배터리 상태 확인") { if (!importing) shizuku?.query() }
-        val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        advanced.addView(actions)
-        smallButton(actions, "연결 설정") { showShizukuHelp() }
-        smallButton(actions, "로그 불러오기") { pickDump() }
-        advancedDetails = text(advanced, "조회 결과는 배터리 진단과 사이클에 표시돼요.", 12, MUTED)
         updated = text(outer, "", 12, MUTED).apply { setPadding(0, dp(18), 0, dp(6)) }
-        button(outer, "측정 근거 · 결과 공유") { showReport() }
-        card(outer).also {
-            text(it, "배터리 기록", 18, FG, true)
-            historyStatus = text(it, "상세 조회와 로그 분석 결과를 자동으로 저장해요. 이전 기록에서 변화와 측정 근거를 확인할 수 있어요.", 13, MUTED)
-            button(it, "이전 기록 보기") { showHistory() }
-            text(it, "원본 덤프는 보관하지 않아요. 저장한 기록은 개별 또는 전체 삭제할 수 있어요.", 12, MUTED)
-        }
-        text(outer, "배터리 기록은 이 기기에서만 처리해요. 공유할 때도 배터리 결과만 전달됩니다.\nv0.4.0", 12, MUTED)
-        setContentView(scroll)
+        outer = dashboard.pages[1]
+        val power = card(outer)
+        text(power, "충전 전력", 14, MUTED, true)
+        powerView = text(power, "— W", 48, GREEN, true)
+        powerSubtitle = text(power, "배터리로 들어오는 순전력을 확인해요.", 13, MUTED)
+        text(power, "배터리 전압 × 순전류로 계산해요. 충전기 출력과는 차이가 있어요.", 12, MUTED)
+        powerStats = text(power, "최고 — W     최저 — W", 16, FG, true).apply { setPadding(0, dp(14), 0, dp(8)) }
+        thermalView = ThermalStatusView(this, palette)
+        power.addView(thermalView, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8); bottomMargin = dp(12) })
+        zeroView = text(power, "0W 이후 회복 0회", 14, FG)
+        text(power, "전력 변화", 14, FG, true)
+        powerGraph = PowerGraphView(this, palette)
+        power.addView(powerGraph, LinearLayout.LayoutParams(-1, dp(200)))
+        graphSelection = text(power, "그래프를 터치하면 그 시점의 값을 볼 수 있어요.", 12, MUTED)
+        powerGraph.onSelection = { graphSelection.text = sampleCaption(it) }
+        monitorStatus = text(power, "측정을 시작하면 화면을 꺼도 ${settings.powerSeconds}초 간격으로 기록해요.", 13, MUTED)
+        monitorButton = button(power, "측정 시작") { togglePowerRecording() }
+        val powerActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        power.addView(powerActions)
+        smallButton(powerActions, "충전 기록") { showPowerHistory() }
+        smallButton(powerActions, "상단바 설정") { showPowerSettings() }
+
+        outer = dashboard.pages[2]
+        val history = card(outer)
+        text(history, "배터리 기록", 18, FG, true)
+        historyStatus = text(history, "조회 결과와 충전 측정을 날짜별로 확인하세요.", 13, MUTED)
+        val categories = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        history.addView(categories)
+        smallButton(categories, "충전 기록") { historyCategory = 0; refreshRecords() }
+        smallButton(categories, "진단 기록") { historyCategory = 1; refreshRecords() }
+        recordsContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        outer.addView(recordsContainer)
+        val evidence = card(outer)
+        text(evidence, "측정 근거 · 결과 공유", 18, FG, true)
+        text(evidence, "값의 출처와 해석을 확인하고 현재 결과를 공유하세요.", 13, MUTED)
+        button(evidence, "측정 근거 보기 · 공유") { showReport() }
+        text(outer, "기록은 이 기기에만 저장돼요. 원본 덤프는 보관하지 않아요.\nv0.5.0", 12, MUTED)
+        setContentView(dashboard.root)
     }
 
     @Suppress("DEPRECATION")
@@ -265,10 +303,10 @@ class MainActivity : Activity() {
         val chargeText = charge.value?.takeIf { it > 0 }?.let { BatteryValues.decimal(it / 1000.0, "mAh") } ?: "정보 없음"
         details.text = "온도     $tempText\n전압     $voltText\n순간 전류     $currentText\n남은 전하량     $chargeText\n상태     ${BatteryValues.condition(extra(battery, BatteryManager.EXTRA_HEALTH))}"
         updated.text = "기본 정보 업데이트  ${SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date())}"
-        renderPower()
+        dashboard.refreshBackdrop()
 
         report = buildString {
-            append("Galaxy Battery v0.4.0 / Kotlin\n조회 시간: $time\n")
+            append("Galaxy Battery v0.5.0 / Kotlin\n조회 시간: $time\n")
             append("Model: ${Build.MODEL}\nAndroid: ${Build.VERSION.RELEASE}\nSDK: ${Build.VERSION.SDK_INT}\n")
             append("Build: ${Build.DISPLAY}\nSecurity patch: ${Build.VERSION.SECURITY_PATCH}\n")
             append("\n공식 사이클 원본: ${rawCycle ?: "미제공"}\n플랫폼 SOH 속성 10: ${healthProperty.raw}\n")
@@ -320,9 +358,9 @@ class MainActivity : Activity() {
             sample.plugged == 0 -> "충전기를 연결하면 유입 전력을 확인할 수 있어요."
             else -> "${BatteryValues.charging(sample.status)} · 배터리 기준 순전력"
         }
-        if (state.id == null && sample != null && sample.time - (previewSamples.lastOrNull()?.time ?: 0L) >= 5000) {
+        if (state.id == null && sample != null && sample.time - (previewSamples.lastOrNull()?.time ?: 0L) >= settings.powerSeconds * 1000L) {
             previewSamples.addLast(sample); if (previewSamples.size > 600) previewSamples.removeFirst()
-            previewStats.add(sample)
+            previewStats.add(sample); previewZero.add(sample)
         }
         val points = if (state.id != null) state.samples else previewSamples.toList()
         powerGraph.setSamples(points)
@@ -333,23 +371,30 @@ class MainActivity : Activity() {
         if (state.error != null) powerStarting = false
         monitorButton.text = if (state.active) "측정 종료 · 기록 저장" else if (powerStarting) "측정 시작 중…" else "측정 시작"
         monitorButton.isEnabled = !powerStarting
+        thermalView.setStatus(sample?.thermalStatus ?: -1)
+        val zero = if (state.id != null) state.zeroState else previewZero.state()
+        zeroView.text = "0W 이후 회복 ${zero.count}회" + (zero.events.lastOrNull()?.let {
+            "\n최근 ${clock(it.started)} → ${clock(it.recovered)}"
+        } ?: "")
+        dashboard.refreshBackdrop()
         monitorStatus.text = when {
             state.error != null -> state.error
-            state.active -> "● 기록 중 · 5초 간격 · ${state.count}개 측정\n화면을 꺼도 기록해요. 충전기의 연결을 해제해도 ‘측정 종료’까지 계속됩니다."
+            state.active -> "● 기록 중 · ${settings.powerSeconds}초 간격 · ${state.count}개 측정\n화면을 꺼도 기록해요. 충전기의 연결을 해제해도 ‘측정 종료’까지 계속됩니다."
             recordingWasActive -> "측정을 종료했어요. ‘충전 기록’에서 그래프와 최고·최저를 다시 볼 수 있어요."
-            else -> "측정을 시작하면 화면을 꺼도 5초 간격으로 기록해요."
+            else -> "측정을 시작하면 화면을 꺼도 ${settings.powerSeconds}초 간격으로 기록해요."
         }
     }
 
     private fun sampleCaption(sample: ChargePower.Sample): String {
         val time = SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(sample.time))
         val level = sample.level.takeIf { it in 0..100 }?.let { "$it%" } ?: "잔량 미지원"
-        return "$time · ${ChargePower.text(sample.watts())} · $level"
+        return "$time · ${ChargePower.text(sample.watts())} · $level\n${ThermalStatus.label(sample.thermalStatus)}"
     }
 
     private fun togglePowerRecording() {
         if (ChargeMonitorService.snapshot.active) {
             startService(Intent(this, ChargeMonitorService::class.java).setAction(ChargeMonitorService.STOP))
+            refreshHandler.postDelayed({ if (!isDestroyed) renderPower() }, 500)
             return
         }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
@@ -363,11 +408,13 @@ class MainActivity : Activity() {
         try {
             powerStarting = true; monitorButton.isEnabled = false; monitorButton.text = "측정 시작 중…"
             startForegroundService(Intent(this, ChargeMonitorService::class.java))
+            refreshHandler.postDelayed({ if (!isDestroyed) renderPower() }, 500)
             refreshHandler.postDelayed({
                 if (!isDestroyed && !ChargeMonitorService.snapshot.active) {
                     powerStarting = false; renderPower()
                     toast("측정을 시작하지 못했어요. 앱 알림과 백그라운드 실행 설정을 확인해 주세요.")
                 }
+                if (!isDestroyed) renderPower()
             }, 5000)
         } catch (_: RuntimeException) {
             powerStarting = false; renderPower()
@@ -404,7 +451,16 @@ class MainActivity : Activity() {
             actual -> "현재 측정이 Live Update로 표시되고 있어요."
             else -> "실시간 업데이트를 요청할 수 있어요. 실제 칩 표시는 One UI가 결정합니다."
         }
-        AlertDialog.Builder(this).setTitle("상단바 · 현재 충전 전력")
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(12), dp(20), dp(12)) }
+        val discharge = CheckBox(this).apply {
+            text = "방전 중에도 상단바에 전력 표시"; isChecked = settings.showDischarge
+            setOnCheckedChangeListener { _, checked -> settings.showDischarge = checked }
+        }
+        content.addView(discharge)
+        text(content, "방전은 −4.2W처럼 음수로 표시해요. 최고·최저는 상단바에 표시하지 않아요.", 12, MUTED)
+        text(content, "갤럭시: 개발자 설정 → 추가 설정 → ‘모든 앱의 실시간 정보 보기’를 켜 주세요. One UI 버전에 따라 메뉴 위치와 이름이 다를 수 있어요.", 13, FG)
+        AlertDialog.Builder(this).setTitle("상단바 · 실시간 전력")
+            .setView(content)
             .setMessage("$state\n\n충전 중 ‘12.3W’처럼 현재 전력만 표시하도록 요청해요. 이 기능은 Android 16 이상에서 지원하며, Live Update와 연결된 알림도 함께 존재합니다.\n\n화면을 꺼도 측정하려면 측정 시작을 누르세요. 기록이 자주 중단되면 앱 정보 → 배터리에서 제한 없음으로 설정하고, 삼성 절전 앱 목록에서도 제외해 주세요. 측정 중에는 CPU가 깨어 있어 배터리 사용량이 늘 수 있어요.")
             .setPositiveButton("실시간 업데이트 설정") { _, _ ->
                 val intent = Intent("android.settings.MANAGE_APP_PROMOTED_NOTIFICATIONS").putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
@@ -415,25 +471,7 @@ class MainActivity : Activity() {
             .setNegativeButton("닫기", null).show()
     }
 
-    private fun showPowerHistory() {
-        historyWorker.execute {
-            try {
-                val sessions = powerStore.list()
-                runOnUiThread {
-                    if (isDestroyed || isFinishing) return@runOnUiThread
-                    val dialog = AlertDialog.Builder(this).setTitle("충전 기록 · ${sessions.size}개").setNegativeButton("닫기", null)
-                    if (sessions.isEmpty()) dialog.setMessage("측정 시작을 누르면 전력 변화가 저장돼요. 화면을 꺼도 기록되며, 최고·최저 값도 함께 보관해요.")
-                    else {
-                        dialog.setItems(sessions.map {
-                            "${SimpleDateFormat("MM/dd HH:mm", Locale.KOREA).format(Date(it.started))} · ${it.count}개 측정\n최고 ${ChargePower.text(it.maximum)} / 최저 ${ChargePower.text(it.minimum)}"
-                        }.toTypedArray()) { _, index -> loadPowerSession(sessions[index].id) }
-                        dialog.setNeutralButton("전체 삭제") { _, _ -> confirmPowerDelete(sessions.map { it.id }) }
-                    }
-                    dialog.show()
-                }
-            } catch (_: Exception) { runOnUiThread { if (!isDestroyed) toast("충전 기록을 읽지 못했어요. 다시 시도해 주세요.") } }
-        }
-    }
+    private fun showPowerHistory() { historyCategory = 0; dashboard.select(2) }
 
     private fun loadPowerSession(id: String) {
         historyWorker.execute {
@@ -446,7 +484,13 @@ class MainActivity : Activity() {
                         else if (ChargeMonitorService.snapshot.active && ChargeMonitorService.snapshot.id == id) "측정 중" else "종료 시각 미기록 · 중단된 측정"
                     text(content, "${session.count}개 측정 · $end", 13, MUTED)
                     text(content, "최고 ${ChargePower.text(session.maximum)}\n최저 ${ChargePower.text(session.minimum)}", 21, FG, true)
-                    val graph = PowerGraphView(this).apply { setSamples(session.samples) }
+                    text(content, "0W 이후 회복 ${session.zeroState.count}회", 18, FG, true)
+                    text(content, "최고 열 제한 단계 · ${ThermalStatus.label(session.peakThermal)}", 13, MUTED)
+                    session.zeroState.events.forEach { event ->
+                        text(content, "${date(event.started)} ${clock(event.started)}\n→ ${date(event.recovered)} ${clock(event.recovered)} · 0W ${event.samples}개 측정", 13, FG)
+                    }
+                    text(content, "0W 구간의 시작·회복은 측정 시각 기준이에요. 연결 해제·미지원·음수 값은 제외해요. 구간은 최근 200건을 표시하고 횟수는 전체 기록 기준이에요.", 12, MUTED)
+                    val graph = PowerGraphView(this, palette).apply { setSamples(session.samples) }
                     content.addView(graph, LinearLayout.LayoutParams(-1, dp(220)))
                     val selection = text(content, "최근 최대 600개를 표시해요. 터치해서 해당 시점의 값을 확인하세요.", 12, MUTED)
                     graph.onSelection = { selection.text = sampleCaption(it) }
@@ -478,36 +522,62 @@ class MainActivity : Activity() {
             } }.show()
     }
 
-    private fun showHistory() {
+    private fun showHistory() { historyCategory = 1; dashboard.select(2) }
+
+    private fun refreshRecords() {
+        val generation = ++recordsGeneration
+        val category = historyCategory
+        historyStatus.text = if (category == 0) "충전 기록을 불러오는 중…" else "진단 기록을 불러오는 중…"
         historyWorker.execute {
             try {
-                val entries = historyStore.list()
+                val sessions = if (category == 0) powerStore.list() else emptyList()
+                val entries = if (category == 1) historyStore.list() else emptyList()
                 runOnUiThread {
-                    if (isDestroyed || isFinishing) return@runOnUiThread
-                    val dialog = AlertDialog.Builder(this).setTitle("배터리 기록 · ${entries.size}개")
-                        .setNegativeButton("닫기", null)
-                    if (entries.isEmpty()) {
-                        dialog.setMessage("아직 저장된 기록이 없어요. 상세 정보를 조회하거나 배터리 로그를 불러오면 자동으로 저장돼요.")
-                    } else {
-                        dialog.setItems(entries.map {
-                            "${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(it.time))} · ${it.source}\n${it.summary.replace('\n', ' ')}"
-                        }.toTypedArray()) { _, index -> showHistoryEntry(entries[index]) }
-                        dialog.setNeutralButton("전체 삭제") { _, _ -> confirmHistoryDelete(entries.map { it.id }) }
+                    if (isDestroyed || generation != recordsGeneration) return@runOnUiThread
+                    recordsContainer.removeAllViews()
+                    val size = sessions.size + entries.size
+                    historyStatus.text = "${if (category == 0) "충전 기록" else "진단 기록"} · ${size}개"
+                    if (size == 0) card(recordsContainer).also {
+                        text(it, "아직 기록이 없어요", 17, FG, true)
+                        text(it, if (category == 0) "충전 모니터링에서 ‘측정 시작’을 누르면 그래프와 전력·열 제한 단계가 저장돼요."
+                            else "배터리 정보를 조회하거나 로그를 불러오면 결과가 자동으로 저장돼요.", 13, MUTED)
                     }
-                    dialog.show()
+                    sessions.forEach { session -> card(recordsContainer).also {
+                        text(it, date(session.started), 17, FG, true)
+                        val end = if (session.ended > 0) clock(session.ended) else if (ChargeMonitorService.snapshot.active && ChargeMonitorService.snapshot.id == session.id) "측정 중" else "중단된 측정"
+                        text(it, "${clock(session.started)} → $end · ${session.count}개 측정", 12, MUTED)
+                        text(it, "최고 ${ChargePower.text(session.maximum)}    최저 ${ChargePower.text(session.minimum)}", 16, GREEN, true)
+                        text(it, "0W 이후 회복 ${session.zeroState.count}회 · 최고 열 제한 ${session.peakThermal.takeIf { v -> v >= 0 }?.let { v -> "${v}단계" } ?: "미기록"}", 13, FG)
+                        button(it, "그래프 · 구간 보기") { loadPowerSession(session.id) }
+                    } }
+                    entries.forEach { entry -> card(recordsContainer).also {
+                        text(it, date(entry.time), 17, FG, true)
+                        text(it, "${clock(entry.time)} · ${entry.source}", 12, MUTED)
+                        text(it, entry.summary, 16, FG, true)
+                        button(it, "진단 결과 보기") { showHistoryEntry(entry) }
+                    } }
+                    if (size > 0) smallButton(recordsContainer, "${if (category == 0) "충전" else "진단"} 기록 전체 삭제") {
+                        if (category == 0) confirmPowerDelete(sessions.map { it.id }) else confirmHistoryDelete(entries.map { it.id })
+                    }
+                    dashboard.refreshBackdrop()
                 }
-            } catch (_: Exception) {
-                runOnUiThread { if (!isDestroyed) toast("저장된 기록을 읽지 못했어요. 잠시 후 다시 시도해 주세요.") }
-            }
+            } catch (_: Exception) { runOnUiThread {
+                if (!isDestroyed && generation == recordsGeneration) historyStatus.text = "기록을 읽지 못했어요. 목록을 다시 눌러 주세요."
+            } }
         }
     }
 
     private fun showHistoryEntry(entry: HistoryStore.Entry) {
-        val content = TextView(this).apply {
-            text = "저장된 조회 결과 · ${entry.source}\n로그 분석 기록의 시각은 파일을 읽은 시각이에요.\n\n${entry.report}"
-            textSize = 13f
-            setTextIsSelectable(true)
-            setPadding(dp(20), dp(12), dp(20), dp(12))
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(12), dp(20), dp(12)) }
+        text(content, "${entry.source} · ${clock(entry.time)}", 13, MUTED)
+        text(content, entry.summary, 22, FG, true)
+        text(content, "로그 분석 기록은 파일을 읽은 시각이에요. 당시의 결과를 보관하며 현재 상태와 다를 수 있어요.", 12, MUTED)
+        val evidence = text(content, entry.report, 12, MUTED).apply {
+            visibility = android.view.View.GONE
+            typeface = Typeface.MONOSPACE; setTextIsSelectable(true)
+        }
+        button(content, "측정 근거 펼치기") {
+            evidence.visibility = if (evidence.visibility == android.view.View.GONE) android.view.View.VISIBLE else android.view.View.GONE
         }
         AlertDialog.Builder(this)
             .setTitle(SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date(entry.time)))
@@ -596,6 +666,7 @@ class MainActivity : Activity() {
     private fun showReport() {
         val snapshot = report + "\nShizuku 진단: ${shizuku?.diagnostic ?: "미연결"}\n"
         val content = TextView(this).apply {
+            setTextColor(FG)
             text = snapshot; textSize = 12f; typeface = Typeface.MONOSPACE
             setTextIsSelectable(true); setPadding(dp(20), dp(12), dp(20), dp(12))
         }
@@ -609,6 +680,48 @@ class MainActivity : Activity() {
                 (getSystemService(CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("배터리 상태", snapshot))
                 toast("결과를 복사했어요.")
             }.setNegativeButton("닫기", null).show()
+    }
+
+    private fun clock(time: Long) = SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(time))
+    private fun date(time: Long) = SimpleDateFormat("yyyy년 M월 d일", Locale.KOREA).format(Date(time))
+    private fun roundedButton(color: Int): RippleDrawable {
+        val shape = GradientDrawable().apply { setColor(color); cornerRadius = dp(22).toFloat() }
+        return RippleDrawable(ColorStateList.valueOf((FG and 0x00ffffff) or (35 shl 24)), shape, null)
+    }
+
+    private fun showSettings() {
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(12), dp(20), dp(12)) }
+        text(content, "테마", 16, FG, true)
+        val themes = arrayOf("기기 설정 따르기", "라이트", "다크")
+        val themeValues = arrayOf("system", "light", "dark")
+        val theme = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, themes)
+            setSelection(themeValues.indexOf(settings.theme).coerceAtLeast(0))
+        }
+        content.addView(theme)
+        fun interval(label: String, initial: Int): Spinner {
+            text(content, label, 16, FG, true)
+            return Spinner(this).apply {
+                adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, RefreshPolicy.intervals.map { "${it}초" })
+                setSelection(RefreshPolicy.intervals.indexOf(initial))
+                content.addView(this)
+            }
+        }
+        val power = interval("충전 속도 갱신 · 기록 간격", settings.powerSeconds)
+        val battery = interval("기본 배터리 상태 갱신 간격", settings.batterySeconds)
+        text(content, "상세 ASOC·BSOH 조회는 ‘배터리 상태 확인’ 버튼으로 실행해요. 짧은 기록 간격은 배터리 사용량과 저장 공간을 늘릴 수 있어요.", 12, MUTED)
+        val blur = CheckBox(this).apply { text = "하단 메뉴 · 설정 버튼 배경 블러"; isChecked = settings.blur }
+        content.addView(blur)
+        text(content, "Android 12 이상에서 적용되며, 지원되지 않으면 단색 배경을 사용해요.", 12, MUTED)
+        button(content, "상단바 실시간 전력 설정") { showPowerSettings() }
+        AlertDialog.Builder(this).setTitle("설정").setView(ScrollView(this).apply { addView(content) })
+            .setPositiveButton("적용") { _, _ ->
+                settings.theme = themeValues[theme.selectedItemPosition]; settings.blur = blur.isChecked
+                settings.powerSeconds = RefreshPolicy.intervals[power.selectedItemPosition]
+                settings.batterySeconds = RefreshPolicy.intervals[battery.selectedItemPosition]
+                // Recreate preserves the selected page and detailed report via saved instance state.
+                recreate()
+            }.setNegativeButton("취소", null).show()
     }
 
     private fun timestamp() = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA).format(Date())
@@ -633,27 +746,26 @@ class MainActivity : Activity() {
 
     private fun button(parent: LinearLayout, label: String, action: () -> Unit): Button {
         val button = Button(this).apply {
-            text = label; isAllCaps = false; setTextColor(BG)
-            backgroundTintList = ColorStateList.valueOf(GREEN)
-            minHeight = dp(52); setOnClickListener { action() }
+            text = label; isAllCaps = false; textSize = 14f; setTextColor(BG)
+            background = roundedButton(GREEN)
+            minHeight = 0; minimumHeight = 0; setPadding(dp(12), 0, dp(12), 0)
+            setOnClickListener { action() }
         }
-        parent.addView(button, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6); bottomMargin = dp(6) })
+        parent.addView(button, LinearLayout.LayoutParams(-1, dp(44)).apply { topMargin = dp(4); bottomMargin = dp(4) })
         return button
     }
 
     private fun smallButton(parent: LinearLayout, label: String, action: () -> Unit) {
         parent.addView(Button(this, null, android.R.attr.borderlessButtonStyle).apply {
             text = label; isAllCaps = false; textSize = 13f; setTextColor(GREEN)
-            minHeight = dp(48); setOnClickListener { action() }
-        }, LinearLayout.LayoutParams(0, -2, 1f))
+            background = roundedButton(palette.selection)
+            minHeight = 0; minimumHeight = 0; setPadding(dp(8), 0, dp(8), 0)
+            setOnClickListener { action() }
+        }, if (parent.orientation == LinearLayout.HORIZONTAL) LinearLayout.LayoutParams(0, dp(44), 1f).apply { leftMargin = dp(3); rightMargin = dp(3) }
+            else LinearLayout.LayoutParams(-1, dp(44)))
     }
 
     companion object {
-        private val BG = Color.rgb(12, 19, 28)
-        private val CARD = Color.rgb(22, 33, 45)
-        private val FG = Color.rgb(238, 245, 250)
-        private val MUTED = Color.rgb(153, 172, 189)
-        private val GREEN = Color.rgb(115, 235, 195)
         private const val NOTIFICATION_PERMISSION = 301
         private const val CYCLE = "android.os.extra.CYCLE_COUNT"
         private const val PICK_DUMP = 201
