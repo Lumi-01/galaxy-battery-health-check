@@ -24,7 +24,7 @@ class DashboardScaffold(private val activity: Activity, palette: AppPalette, blu
         root.addView(host, FrameLayout.LayoutParams(-1, -1))
         navigation = FrostedNavigation(activity, host, palette, blur) { select(it) }
         settingsButton = FrostedSettingsButton(activity, host, palette, blur, openSettings)
-        val titles = arrayOf("배터리 상태", "충전 모니터링", "기록·공유")
+        val titles = arrayOf("배터리 사이클 체크", "충전 모니터링", "기록·공유")
         titles.forEach { title ->
             val content = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
@@ -39,6 +39,7 @@ class DashboardScaffold(private val activity: Activity, palette: AppPalette, blu
             val heading = LinearLayout(activity).apply { gravity = Gravity.CENTER_VERTICAL }
             val headingText = TextView(activity).apply {
                 text = title; textSize = 27f; setTextColor(palette.foreground)
+                if (title == "배터리 사이클 체크") textSize = 24f
                 setTypeface(Typeface.DEFAULT, Typeface.BOLD)
             }
             heading.addView(headingText, LinearLayout.LayoutParams(0, -2, 1f))

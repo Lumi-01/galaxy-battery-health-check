@@ -15,7 +15,7 @@ class HardwareReader(activity: Activity, private val callback: (String, String) 
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private val args = Shizuku.UserServiceArgs(ComponentName(activity, RemoteBatteryService::class.java))
-        .daemon(false).processNameSuffix("hardware_reader").tag("hardware_read_only").version(4)
+        .daemon(false).processNameSuffix("hardware_reader").tag("hardware_read_only").version(5)
     private var bound = false
     private var remote: IRemoteBattery? = null
     private var active = false

@@ -7,11 +7,14 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
+import java.util.Locale
 
 /** A compact thermal summary; severity is named and numbered, never conveyed by color alone. */
 class ThermalStatusView(context: Context, private val palette: AppPalette) : LinearLayout(context) {
     private val state = TextView(context)
     private val badge = TextView(context)
+    private val load = TextView(context)
+    private val signals = TextView(context)
     init {
         orientation = VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12))
         background = GradientDrawable().apply {
@@ -19,7 +22,7 @@ class ThermalStatusView(context: Context, private val palette: AppPalette) : Lin
         }
         val row = LinearLayout(context).apply { gravity = Gravity.CENTER_VERTICAL }
         val names = LinearLayout(context).apply { orientation = VERTICAL }
-        names.addView(TextView(context).apply { text = "쓰로틀링"; textSize = 12f; setTextColor(palette.muted) })
+        names.addView(TextView(context).apply { text = "열 제한 · 쓰로틀링"; textSize = 12f; setTextColor(palette.muted) })
         names.addView(state.apply {
             textSize = 17f; setTextColor(palette.foreground); setTypeface(Typeface.DEFAULT, Typeface.BOLD)
             setPadding(0, dp(3), 0, 0)
@@ -30,13 +33,15 @@ class ThermalStatusView(context: Context, private val palette: AppPalette) : Lin
             setPadding(dp(12), dp(8), dp(12), dp(8))
         }, LayoutParams(-2, -2).apply { leftMargin = dp(10) })
         addView(row)
+        addView(load.apply { textSize = 12f; setTextColor(palette.muted); setPadding(0, dp(10), 0, 0) })
+        addView(signals.apply { textSize = 11f; setTextColor(palette.muted); setPadding(0, dp(5), 0, 0) })
         addView(TextView(context).apply {
-            text = "기기 전체 기준 · 충전 제한 원인과는 다를 수 있어요."
+            text = "OS 단계와 실제 클럭 제한은 다를 수 있어요. 0단계만으로 쓰로틀링 없음을 확정하지 않아요."
             textSize = 11f; setTextColor(palette.muted); setPadding(0, dp(8), 0, 0)
         })
         setStatus(-1)
     }
-    fun setStatus(status: Int) {
+    fun setStatus(status: Int, headroom: Float? = null, cooling: List<HardwareTelemetry.Cooling> = emptyList()) {
         val known = status in 0..6
         state.text = ThermalStatus.label(status).substringBefore(" ·")
         badge.text = if (known) "${status}단계" else "—"
@@ -51,7 +56,15 @@ class ThermalStatusView(context: Context, private val palette: AppPalette) : Lin
         badge.background = GradientDrawable().apply {
             setColor((color and 0x00ffffff) or (28 shl 24)); cornerRadius = dp(18).toFloat()
         }
-        contentDescription = "쓰로틀링, ${ThermalStatus.label(status)}"
+        load.text = headroom?.let { String.format(Locale.US, "열 부하 %.2f · %s\n심한 제한 기준 1.0 · 10초마다 확인", it, ThermalStatus.headroomWarning(it)) }
+            ?: "열 부하 · 기기에서 제공하지 않아요"
+        val active = cooling.filter { it.state > 0 }
+        signals.text = when {
+            cooling.isEmpty() -> "추가 제한 신호 · 확인 불가"
+            active.isEmpty() -> "추가 제한 신호 · 작동 중인 항목 없음"
+            else -> "추가 제한 신호 · ${active.size}개 작동\n" + active.take(3).joinToString(" · ") { "${it.name} ${it.state}/${it.maximum}" }
+        }
+        contentDescription = "쓰로틀링, ${ThermalStatus.label(status)}, ${load.text}, ${signals.text}"
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()
 }

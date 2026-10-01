@@ -2,32 +2,32 @@
 <resources>
     <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#8ED5B2</item>
+        <item name="android:colorAccent">#8BDEC9</item>
         <item name="android:windowLightStatusBar">false</item>
         <item name="android:windowLightNavigationBar">false</item>
-        <item name="android:windowBackground">#101512</item>
-        <item name="android:statusBarColor">#101512</item>
-        <item name="android:navigationBarColor">#101512</item>
+        <item name="android:windowBackground">#111317</item>
+        <item name="android:statusBarColor">#111317</item>
+        <item name="android:navigationBarColor">#111317</item>
         <item name="android:alertDialogTheme">@style/AppDialog.Dark</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
     <style name="AppTheme.Light" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:colorAccent">#246B4D</item>
+        <item name="android:colorAccent">#147D70</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
-        <item name="android:windowBackground">#F6FBF5</item>
-        <item name="android:statusBarColor">#F6FBF5</item>
-        <item name="android:navigationBarColor">#F6FBF5</item>
+        <item name="android:windowBackground">#F4F5F8</item>
+        <item name="android:statusBarColor">#F4F5F8</item>
+        <item name="android:navigationBarColor">#F4F5F8</item>
         <item name="android:alertDialogTheme">@style/AppDialog.Light</item>
         <item name="android:windowActionModeOverlay">true</item>
     </style>
     <style name="AppDialog.Dark" parent="android:style/Theme.Material.Dialog.Alert">
         <item name="android:windowBackground">@drawable/dialog_surface</item>
-        <item name="android:colorBackground">#29302B</item>
-        <item name="android:colorAccent">#8ED5B2</item>
-        <item name="android:textColorPrimary">#E0E4DE</item>
-        <item name="android:textColorSecondary">#BFC9C0</item>
+        <item name="android:colorBackground">#25282D</item>
+        <item name="android:colorAccent">#8BDEC9</item>
+        <item name="android:textColorPrimary">#F1F3F7</item>
+        <item name="android:textColorSecondary">#B7BDC6</item>
         <item name="android:windowMinWidthMajor">90%</item>
         <item name="android:windowMinWidthMinor">90%</item>
         <item name="android:backgroundDimAmount">0.42</item>
@@ -35,10 +35,10 @@
     </style>
     <style name="AppDialog.Light" parent="android:style/Theme.Material.Light.Dialog.Alert">
         <item name="android:windowBackground">@drawable/dialog_surface</item>
-        <item name="android:colorBackground">#ECF2EC</item>
-        <item name="android:colorAccent">#246B4D</item>
-        <item name="android:textColorPrimary">#181D19</item>
-        <item name="android:textColorSecondary">#414942</item>
+        <item name="android:colorBackground">#FFFFFF</item>
+        <item name="android:colorAccent">#147D70</item>
+        <item name="android:textColorPrimary">#151619</item>
+        <item name="android:textColorSecondary">#66707B</item>
         <item name="android:windowMinWidthMajor">90%</item>
         <item name="android:windowMinWidthMinor">90%</item>
         <item name="android:backgroundDimAmount">0.42</item>

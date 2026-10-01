@@ -16,8 +16,7 @@ class FrostedSettingsButton(context: Context, private val source: View, private 
     private val density = resources.displayMetrics.density
     private val backdrop = FrostedBackdrop(context, source, palette, blur, 12f)
     init {
-        val shape = GradientDrawable().apply { setColor(Color.TRANSPARENT); cornerRadius = 24 * density
-            setStroke(maxOf(1, density.toInt()), (palette.foreground and 0x00ffffff) or (36 shl 24)) }
+        val shape = GradientDrawable().apply { setColor(Color.TRANSPARENT); cornerRadius = 24 * density }
         background = shape; clipToOutline = true; elevation = 2 * density
         addView(backdrop, LayoutParams(-1, -1))
         addView(ImageView(context).apply {
@@ -25,7 +24,9 @@ class FrostedSettingsButton(context: Context, private val source: View, private 
             imageTintList = ColorStateList.valueOf(palette.foreground)
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }, LayoutParams((20 * density).toInt(), (20 * density).toInt(), Gravity.CENTER))
-        foreground = RippleDrawable(ColorStateList.valueOf((palette.foreground and 0x00ffffff) or (35 shl 24)), shape, GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = 24 * density })
+        foreground = RippleDrawable(ColorStateList.valueOf((palette.accent and 0x00ffffff) or (35 shl 24)),
+            LiquidGlassEdge(density, 24f, Color.red(palette.background) < 100),
+            GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = 24 * density })
         isClickable = true; isFocusable = true; contentDescription = "설정"
         setOnClickListener { onClick() }
     }

@@ -21,6 +21,15 @@ class AppSettings(context: Context) {
     var blur: Boolean
         get() = preferences.getBoolean("nav_blur", true)
         set(value) { preferences.edit().putBoolean("nav_blur", value).apply() }
+    var cpuCores: Boolean
+        get() = preferences.getBoolean("cpu_cores", false)
+        set(value) { preferences.edit().putBoolean("cpu_cores", value).apply() }
+    var gpuCores: Boolean
+        get() = preferences.getBoolean("gpu_cores", false)
+        set(value) { preferences.edit().putBoolean("gpu_cores", value).apply() }
+    var temperatureSensors: Boolean
+        get() = preferences.getBoolean("temperature_sensors", false)
+        set(value) { preferences.edit().putBoolean("temperature_sensors", value).apply() }
     var showDischarge: Boolean
         get() = preferences.getBoolean(SHOW_DISCHARGE, false)
         set(value) { preferences.edit().putBoolean(SHOW_DISCHARGE, value).apply() }

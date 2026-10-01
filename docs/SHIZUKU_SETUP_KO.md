@@ -4,7 +4,7 @@
 
 ## 1. 설치
 
-[Shizuku 공식 다운로드](https://shizuku.rikka.app/download/)에서 Google Play 또는 GitHub Release로 이동해 설치하세요. 갤럭시 배터리 앱은 **[앱 설치 파일 다운로드](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.5.1.apk)**를 눌러 받을 수 있습니다. 휴대폰에서 다운로드한 APK를 열어 설치하세요.
+[Shizuku 공식 다운로드](https://shizuku.rikka.app/download/)에서 Google Play 또는 GitHub Release로 이동해 설치하세요. 갤럭시 배터리 앱은 **[앱 설치 파일 다운로드](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.5.2.apk)**를 눌러 받을 수 있습니다. 휴대폰에서 다운로드한 APK를 열어 설치하세요.
 
 ## 2. 개발자 옵션 열기
 
@@ -30,7 +30,7 @@
 | 상황 | 확인할 내용 |
 |---|---|
 | 페어링 알림이 안 보임 | Shizuku 알림 권한과 백그라운드 실행 상태를 확인합니다. |
-| 연결했는데 앱 권한이 없음 | Shizuku의 승인된 앱 목록에서 **배터리 상태**를 허용합니다. |
+| 연결했는데 앱 권한이 없음 | Shizuku의 승인된 앱 목록에서 **배터리 사이클 체크**를 허용합니다. |
 | 연결됐지만 값이 없음 | 펌웨어가 필드를 제공하지 않을 수 있습니다. 앱의 **로그 불러오기**를 사용합니다. |
 | 개발자 옵션이 조직 정책으로 제한됨 | 기기 관리자에게 문의합니다. |
 

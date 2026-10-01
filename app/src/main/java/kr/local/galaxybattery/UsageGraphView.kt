@@ -2,9 +2,6 @@ package kr.local.galaxybattery
 
 import android.content.Context
 import android.graphics.*
-import android.text.SpannableStringBuilder
-import android.text.Spanned
-import android.text.style.ForegroundColorSpan
 import android.util.TypedValue
 import android.view.View
 import java.text.SimpleDateFormat
@@ -12,26 +9,14 @@ import java.util.Date
 import java.util.Locale
 
 /** Percent charts use typed samples; missing data breaks the line instead of becoming zero. */
-class UsageGraphView(context: Context, private val palette: AppPalette, private val cpu: Boolean) : View(context) {
+class UsageGraphView(context: Context, private val palette: AppPalette, private val cpu: Boolean, private val core: Int? = null) : View(context) {
     private var frames: List<HardwareTelemetry.Frame> = emptyList()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val density = resources.displayMetrics.density
     fun setFrames(values: List<HardwareTelemetry.Frame>) {
         frames = values
-        contentDescription = "${if (cpu) "CPU 코어별" else "GPU 전체"} 사용률 그래프, ${values.size}개 측정, 0부터 100퍼센트"
+        contentDescription = "${if (cpu) core?.let { "CPU $it" } ?: "CPU 전체" else "GPU 전체"} 사용률 그래프, ${values.size}개 측정, 0부터 100퍼센트"
         invalidate()
-    }
-    fun legend(frame: HardwareTelemetry.Frame): CharSequence {
-        if (!cpu) return "GPU · " + (frame.gpu?.let { String.format(Locale.US, "%.1f%%", it) } ?: "확인 불가")
-        if (frame.cpu.isEmpty()) return "CPU 사용률 확인 불가"
-        return SpannableStringBuilder().apply {
-            frame.cpu.toSortedMap().entries.forEachIndexed { index, (id, usage) ->
-                if (index > 0) append(if (index % 3 == 0) "\n" else "   ")
-                val start = length
-                append("CPU $id · ${usage?.let { String.format(Locale.US, "%.0f%%", it) } ?: "—"}")
-                setSpan(ForegroundColorSpan(coreColor(id)), start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-        }
     }
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
@@ -44,7 +29,7 @@ class UsageGraphView(context: Context, private val palette: AppPalette, private 
         fun y(value: Double) = bottom - (value / 100 * (bottom - top)).toFloat()
         paint.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 10f, resources.displayMetrics)
         paint.strokeWidth = density
-        for (value in 0..100 step 25) {
+        for (value in 0..100 step 50) {
             paint.color = palette.grid; canvas.drawLine(left, y(value.toDouble()), right, y(value.toDouble()), paint)
             paint.color = palette.muted; canvas.drawText("$value%", 0f, y(value.toDouble()) + 3 * density, paint)
         }
@@ -55,16 +40,15 @@ class UsageGraphView(context: Context, private val palette: AppPalette, private 
             val last = format.format(Date(end))
             canvas.drawText(last, right - paint.measureText(last), height - 5 * density, paint)
         }
-        val keys = if (cpu) frames.flatMap { it.cpu.keys }.distinct().sorted() else listOf(-1)
         val gap = RefreshPolicy.graphGapMs(frames.map { it.time })
         var any = false
         paint.strokeWidth = 2 * density; paint.strokeCap = Paint.Cap.ROUND
-        keys.forEach { key ->
-            paint.color = if (cpu) coreColor(key) else palette.accent
+        paint.color = if (cpu) core?.let { coreColor(it) } ?: palette.accent else palette.negative
             var previous: HardwareTelemetry.Frame? = null
             var previousValue: Double? = null
             frames.forEach { frame ->
-                val value = if (cpu) frame.cpu[key] else frame.gpu
+                val value = (when { !cpu -> frame.gpu; core == null -> frame.cpuTotal; else -> frame.cpu[core] })
+                    ?.takeIf { it.isFinite() && it in 0.0..100.0 }
                 if (value != null) {
                     any = true
                     previous?.let { old -> previousValue?.let { oldValue ->
@@ -74,7 +58,6 @@ class UsageGraphView(context: Context, private val palette: AppPalette, private 
                 }
                 previous = frame; previousValue = value
             }
-        }
         if (!any) {
             paint.color = palette.muted
             paint.textSize = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 12f, resources.displayMetrics)

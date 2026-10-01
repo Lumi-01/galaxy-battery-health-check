@@ -3,6 +3,8 @@ package kr.local.galaxybattery
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
+import android.content.res.ColorStateList
 import android.view.Gravity
 import android.view.View
 import android.widget.*
@@ -19,9 +21,8 @@ class FrostedNavigation(context: Context, private val source: View, private val 
     private val icons = mutableListOf<ImageView>()
     init {
         val radius = 28 * density
-        background = GradientDrawable().apply { setColor(Color.TRANSPARENT); cornerRadius = radius
-            setStroke(dp(1), (palette.foreground and 0x00ffffff) or (36 shl 24)) }
-        foreground = background // Draw the glass edge above the backdrop.
+        background = GradientDrawable().apply { setColor(Color.TRANSPARENT); cornerRadius = radius }
+        foreground = LiquidGlassEdge(density, 28f, Color.red(palette.background) < 100)
         clipToOutline = true
         elevation = 2 * density
         addView(backdrop, LayoutParams(-1, -1))
@@ -56,10 +57,13 @@ class FrostedNavigation(context: Context, private val source: View, private val 
     fun select(index: Int) {
         items.forEachIndexed { i, item ->
             item.isSelected = i == index
-            item.background = GradientDrawable().apply {
-                setColor(if (i == index) palette.selection else Color.TRANSPARENT)
+            val shape = GradientDrawable().apply {
+                setColor(if (i == index) (palette.selection and 0xFFFFFF) or (190 shl 24) else Color.TRANSPARENT)
                 cornerRadius = 24 * density
             }
+            item.background = RippleDrawable(ColorStateList.valueOf((palette.accent and 0xFFFFFF) or (36 shl 24)), shape, null)
+            val color = palette.foreground
+            labels[i].setTextColor(color); icons[i].imageTintList = ColorStateList.valueOf(color)
             labels[i].setTypeface(Typeface.DEFAULT, if (i == index) Typeface.BOLD else Typeface.NORMAL)
         }
         refreshBackdrop()

@@ -17,6 +17,7 @@
 | [FrostedSettingsButton.kt](../app/src/main/java/kr/local/galaxybattery/FrostedSettingsButton.kt) | 페이지 위에 떠 있는 작은 설정 버튼과 배경 블러 |
 | [AppSettings.kt](../app/src/main/java/kr/local/galaxybattery/AppSettings.kt) | 테마·간격·블러·방전 표시 설정 저장 |
 | [AppPalette.kt](../app/src/main/java/kr/local/galaxybattery/AppPalette.kt) | 라이트·다크 색상 |
+| [BatteryLevelView.kt](../app/src/main/java/kr/local/galaxybattery/BatteryLevelView.kt) | 둥근 잔량 막대, 민트 그라데이션, 낮은 잔량 색상과 접근성 |
 | [RefreshPolicy.kt](../app/src/main/java/kr/local/galaxybattery/RefreshPolicy.kt) | 간격 검증, 시스템 테마, 그래프 연결 허용 시간 |
 | [ZeroPowerTracker.kt](../app/src/main/java/kr/local/galaxybattery/ZeroPowerTracker.kt) | 0W 이후 회복 판정, 구간·횟수, 중단 후 복원 |
 | [ThermalStatus.kt](../app/src/main/java/kr/local/galaxybattery/ThermalStatus.kt) | Android 열 제한 0~6단계 이름 |
@@ -26,7 +27,12 @@
 | [PowerSampler.kt](../app/src/main/java/kr/local/galaxybattery/PowerSampler.kt) | Android 전류·전압·잔량·온도·기기 열 제한 단계 읽기 |
 | [PowerLogStore.kt](../app/src/main/java/kr/local/galaxybattery/PowerLogStore.kt) | 측정별 전력 기록 영구 저장, 중단된 마지막 쓰기 복구, 열람·삭제 |
 | [PowerGraphView.kt](../app/src/main/java/kr/local/galaxybattery/PowerGraphView.kt) | Canvas 전력 그래프와 터치로 시점 선택 |
-| [UsageGraphView.kt](../app/src/main/java/kr/local/galaxybattery/UsageGraphView.kt) | CPU 코어별·GPU 전체 사용률 그래프, 범례, 누락 구간 처리 |
+| [UsageGraphView.kt](../app/src/main/java/kr/local/galaxybattery/UsageGraphView.kt) | CPU·GPU 전체 및 CPU 개별 코어의 단일선 그래프, 누락 구간 처리 |
+| [HardwareMonitorView.kt](../app/src/main/java/kr/local/galaxybattery/HardwareMonitorView.kt) | 전체·코어별 그래프 카드, 하단 수치, 센서별 온도 행 |
+| [OneUiToggle.kt](../app/src/main/java/kr/local/galaxybattery/OneUiToggle.kt) | 파란 캡슐 스위치와 전체 행 터치, 스위치 접근성 |
+| [OptionPicker.kt](../app/src/main/java/kr/local/galaxybattery/OptionPicker.kt) | 테마·간격 선택용 둥근 팝업 |
+| [LiquidGlassEdge.kt](../app/src/main/java/kr/local/galaxybattery/LiquidGlassEdge.kt) | 메뉴·설정 버튼 위의 반사 테두리 |
+| [ThermalMonitor.kt](../app/src/main/java/kr/local/galaxybattery/ThermalMonitor.kt) | OS 열 상태 이벤트, 10초 열 부하 조회, 화면 종료 후 정리 |
 | [HardwareTelemetry.kt](../app/src/main/java/kr/local/galaxybattery/HardwareTelemetry.kt) | CPU 카운터 차이, 그래프용 샘플, 온도 센서 선택·코어 매핑 |
 | [HardwareReader.kt](../app/src/main/java/kr/local/galaxybattery/HardwareReader.kt) | 화면 조회, Shizuku 또는 직접 읽기, 시간 제한과 서비스 정리 |
 | [HardwareProbe.kt](../app/src/main/java/kr/local/galaxybattery/HardwareProbe.kt) | 고정된 proc/sysfs 경로의 CPU·GPU·온도 읽기 |
@@ -89,7 +95,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 이후 소스만 수정했다면 `build.ps1`만 다시 실행하면 됩니다.
 
-- APK: `dist/galaxy-battery-0.5.1.apk`
+- APK: `dist/galaxy-battery-0.5.2.apk`
 - 체크섬: `dist/SHA256SUMS.txt`
 - 로컬 서명키: `.tools/diagnostic.keystore`
 
@@ -115,13 +121,13 @@ PowerShell 빌드는 다음 검증을 실행합니다.
 - [DumpParserTest.java](../tests/DumpParserTest.java): 로그 분석 35개
 - [HistoryStoreTest.java](../tests/HistoryStoreTest.java): 재실행 후 유지, 정렬, 저장 실패, 개별·전체 삭제 등 11개
 - [PowerLogTest.java](../tests/PowerLogTest.java): W 계산, 부호·미지원 값, 최고·최저, 기록 재열람·부분 쓰기 복구·삭제 등 33개
-- [MonitorPolicyTest.java](../tests/MonitorPolicyTest.java): 0W 구간·복원·제외 조건, 이전 파일 호환, 열 제한, 방전 칩, 설정·그래프 간격 등 25개
-- [HardwareTelemetryTest.java](../tests/HardwareTelemetryTest.java): CPU 델타·잘못된 열 처리·그래프 샘플·온도 대체 센서 선택·방전 기록 전체 집계 등 28개
+- [MonitorPolicyTest.java](../tests/MonitorPolicyTest.java): 0W 구간·복원·제외 조건, 이전 파일 호환, 열 단계와 열 부하 해석, 방전 칩, 설정·그래프 간격 등 29개
+- [HardwareTelemetryTest.java](../tests/HardwareTelemetryTest.java): CPU 전체·코어별 델타, 클럭·센서 식별·제한 신호, 잘못된 값, 방전 기록 전체 집계 등 40개
 - APK 서명·정렬·매니페스트 확인
 
 테스트는 별도 JVM 실행기이며 Gradle의 `test` 작업에 연결되어 있지 않습니다. Android 화면 동작, Shizuku 권한 창, 실제 삼성 펌웨어의 응답은 실기기에서 별도로 확인해야 합니다.
 
-v0.5.1은 Android 15 에뮬레이터에서도 3개 페이지, 라이트·다크 전환, 갱신 간격 저장, Shizuku 미연결 안내, 시스템 열 상태 2단계 표시, 화면 꺼짐 기록과 종료 후 wake lock 해제를 확인했습니다. 테스트용 기록으로 0W 회복 시간대·횟수 표시, 진단 요약과 근거 펼치기, 개별 삭제를 확인했습니다. 에뮬레이터 값과 예시 기록은 S25 실측 결과가 아니며, Android 16/One UI 상단바 칩은 이 에뮬레이터 검증에 포함되지 않습니다.
+v0.5.2은 Android 15 에뮬레이터에서도 3개 페이지, 라이트·다크 전환, 갱신 간격 저장, Shizuku 미연결 안내, 시스템 열 상태 2단계 표시, 화면 꺼짐 기록과 종료 후 wake lock 해제를 확인했습니다. 테스트용 기록으로 0W 회복 시간대·횟수 표시, 진단 요약과 근거 펼치기, 개별 삭제를 확인했습니다. 에뮬레이터 값과 예시 기록은 S25 실측 결과가 아니며, Android 16/One UI 상단바 칩은 이 에뮬레이터 검증에 포함되지 않습니다.
 
 로그 분석은 최대 90초, 압축 해제 후 512 MiB까지 읽으며, 긴 한 줄은 64 KiB를 넘으면 제외합니다. ZIP 내부 파일은 최대 2,048개로 제한하고 중첩 압축을 재귀 분석하지 않습니다. 원본 로그 전체를 보관하지 않고 지정된 배터리 필드만 추출합니다.
 
@@ -139,7 +145,11 @@ API 36의 `setShortCriticalText()`에 현재 W만 전달하고, `android.request
 
 기본 배터리 조회와 전력 조회는 별도의 Handler 타이머로 작동합니다. 서비스는 매 주기 설정을 읽고, 기록 간격 변경 시 다음 샘플을 다시 예약해 같은 세션을 유지합니다. 상세 조회는 자동 타이머에 연결하지 않습니다. `PowerSampler`에서 API 29 이상 시스템 열 상태를 읽고, UI·그래프 선택·기록에 전달합니다. 기기 전체 열 상태를 충전 제한 원인으로 단정하지 마세요.
 
-CPU·GPU 조회도 별도 Handler 타이머를 사용합니다. `AppSettings.hardwareSeconds`의 기본값은 2초입니다. 모니터링 화면을 벗어나면 타이머와 연결을 정리하며, 복귀 시 CPU 차이 계산 기준을 다시 잡습니다. `HardwareTelemetry.Frame`의 nullable 사용률을 그래프에 전달하므로 미지원·첫 측정·잘못된 카운터는 0%로 변환되지 않습니다. 최근 120개 샘플은 메모리에서만 유지합니다. CPU·GPU 전체 온도 센서를 우선 선택하고, 없으면 이름으로 구분한 해당 센서의 최고값과 이름을 표시합니다. SoC나 클러스터를 코어 온도로 임의 환산하지 않습니다.
+CPU·GPU 조회도 별도 Handler 타이머를 사용합니다. `AppSettings.hardwareSeconds`의 기본값은 2초입니다. 모니터링 화면을 벗어나면 타이머와 연결을 정리하며, 복귀 시 CPU 차이 계산 기준을 다시 잡습니다. `HardwareTelemetry.Frame`의 nullable 사용률을 그래프에 전달하므로 미지원·첫 측정·잘못된 카운터는 0%로 변환되지 않습니다. CPU 전체는 `/proc/stat`의 집계 행을 우선하고, 없으면 모든 온라인 코어의 유효한 시간 차이를 가중 합산합니다. 최근 120개 샘플은 메모리에서만 유지합니다. 코어별 옵션은 기본 꺼짐이며 CPU·GPU·센서 설정을 각각 저장합니다. 현재 GPU 인터페이스는 전체 정보만 제공하여 코어별 옵션에서는 안내를 표시합니다.
+
+CPU 클럭은 `cpuinfo_cur_freq`, 미지원 시 `scaling_cur_freq`를 읽어 kHz에서 MHz로 변환합니다. 후자는 정책의 요청 클럭일 수 있으므로 정확한 실시간 하드웨어 주파수라고 단정하지 않습니다. GPU KGSL/devfreq 클럭은 Hz에서 MHz로 변환합니다. 최대 지원 주파수를 현재 클럭으로 대체하지 않습니다. CPU·GPU 전체 온도 센서를 우선 선택하고, 없으면 해당 센서의 최고값과 이름을 표시합니다. 명시적인 코어 이름만 코어 온도로 매핑합니다. 같은 이름의 서로 다른 thermal zone도 ID를 유지하여 각각 표시합니다.
+
+`ThermalMonitor`는 OS 상태 변경 리스너와 10초 주기의 열 부하 조회를 사용합니다. 앱을 재생성해도 호출 시각을 유지하여 API를 과도하게 조회하지 않으며, 종료 시 리스너와 타이머를 해제합니다. 전력 기록의 마지막 샘플로 실시간 OS 상태를 덮어쓰지 않습니다. 0단계는 OS 제한 보고 없음으로 표현합니다. 커널 제한 장치의 상태는 OS 단계와 구분하고, 열 부하나 클럭만으로 확정 단계를 만들지 않습니다. 기록 파일에는 기존의 OS 단계만 저장하여 이전 파일 형식을 유지합니다.
 
 테마는 Activity 생성 전에 적용하며 기본값은 시스템 설정입니다. 아이콘의 foreground는 launcher 안전 영역 안에 두고, 마스크 모양은 Android 런처에 맡깁니다. 하단 블러는 page host만 캡처하므로 메뉴 자체를 재귀 캡처하지 않으며, 라벨과 아이콘은 블러 위에 선명하게 그립니다.
 

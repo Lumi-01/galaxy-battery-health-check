@@ -42,6 +42,10 @@ public class MonitorPolicyTest {
         check(RefreshPolicy.dark("system",true) && !RefreshPolicy.dark("light",true) && RefreshPolicy.dark("dark",false));
         check(RefreshPolicy.graphGapMs(Arrays.asList(0L,60000L,120000L)) == 180000);
         check(ThermalStatus.label(-1).contains("확인 불가") && ThermalStatus.label(0).contains("없음") && ThermalStatus.label(6).contains("6단계"));
+        check(ThermalStatus.validHeadroom(Float.NaN) == null && ThermalStatus.validHeadroom(Float.POSITIVE_INFINITY) == null && ThermalStatus.validHeadroom(-1f) == null);
+        check(ThermalStatus.validHeadroom(1.25f).equals(1.25f)); // Values above 1 are meaningful, not clamped to 100%.
+        check(ThermalStatus.headroomWarning(null).contains("확인 불가") && ThermalStatus.headroomWarning(.9f).contains("가능성") && ThermalStatus.headroomWarning(1.1f).contains("기준 이상"));
+        check(!ThermalStatus.label(0).contains("열 제한 없음")); // OS zero is not proof of no real throttling.
         Path dir = Files.createTempDirectory("monitor-policy");
         try {
             PowerLogStore store = new PowerLogStore(dir.toFile());
