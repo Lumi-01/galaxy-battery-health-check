@@ -9,6 +9,10 @@ public interface IRemoteBattery extends android.os.IInterface
     {
       return null;
     }
+    @Override public java.lang.String readHardware() throws android.os.RemoteException
+    {
+      return null;
+    }
     @Override public void destroy() throws android.os.RemoteException
     {
     }
@@ -64,6 +68,13 @@ public interface IRemoteBattery extends android.os.IInterface
           reply.writeString(_result);
           break;
         }
+        case TRANSACTION_readHardware:
+        {
+          java.lang.String _result = this.readHardware();
+          reply.writeNoException();
+          reply.writeString(_result);
+          break;
+        }
         case TRANSACTION_destroy:
         {
           this.destroy();
@@ -109,6 +120,23 @@ public interface IRemoteBattery extends android.os.IInterface
         }
         return _result;
       }
+      @Override public java.lang.String readHardware() throws android.os.RemoteException
+      {
+        android.os.Parcel _data = android.os.Parcel.obtain();
+        android.os.Parcel _reply = android.os.Parcel.obtain();
+        java.lang.String _result;
+        try {
+          _data.writeInterfaceToken(DESCRIPTOR);
+          boolean _status = mRemote.transact(Stub.TRANSACTION_readHardware, _data, _reply, 0);
+          _reply.readException();
+          _result = _reply.readString();
+        }
+        finally {
+          _reply.recycle();
+          _data.recycle();
+        }
+        return _result;
+      }
       @Override public void destroy() throws android.os.RemoteException
       {
         android.os.Parcel _data = android.os.Parcel.obtain();
@@ -125,10 +153,12 @@ public interface IRemoteBattery extends android.os.IInterface
       }
     }
     static final int TRANSACTION_readBattery = (android.os.IBinder.FIRST_CALL_TRANSACTION + 0);
+    static final int TRANSACTION_readHardware = (android.os.IBinder.FIRST_CALL_TRANSACTION + 1);
     static final int TRANSACTION_destroy = (android.os.IBinder.FIRST_CALL_TRANSACTION + 16777114);
   }
   /** @hide */
   public static final java.lang.String DESCRIPTOR = "kr.local.galaxybattery.IRemoteBattery";
   public java.lang.String readBattery() throws android.os.RemoteException;
+  public java.lang.String readHardware() throws android.os.RemoteException;
   public void destroy() throws android.os.RemoteException;
 }

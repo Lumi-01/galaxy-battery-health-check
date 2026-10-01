@@ -43,10 +43,10 @@ foreach ($folder in @('classes', 'test-classes', 'generated', 'dex')) {
 }
 $valueSource = Join-Path $sourceRoot 'java/kr/local/galaxybattery/BatteryValues.kt'
 $parserSource = Join-Path $sourceRoot 'java/kr/local/galaxybattery/DumpParser.kt'
-& $java -cp "$compilerLib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -jvm-target 1.8 -classpath $stdlib -d "$build/test-classes" $valueSource $parserSource "$sourceRoot/java/kr/local/galaxybattery/HistoryStore.kt" "$sourceRoot/java/kr/local/galaxybattery/ChargePower.kt" "$sourceRoot/java/kr/local/galaxybattery/PowerLogStore.kt" "$sourceRoot/java/kr/local/galaxybattery/ZeroPowerTracker.kt" "$sourceRoot/java/kr/local/galaxybattery/ThermalStatus.kt" "$sourceRoot/java/kr/local/galaxybattery/RefreshPolicy.kt"
+& $java -cp "$compilerLib/*" org.jetbrains.kotlin.cli.jvm.K2JVMCompiler -no-stdlib -no-reflect -jvm-target 1.8 -classpath $stdlib -d "$build/test-classes" $valueSource $parserSource "$sourceRoot/java/kr/local/galaxybattery/HistoryStore.kt" "$sourceRoot/java/kr/local/galaxybattery/ChargePower.kt" "$sourceRoot/java/kr/local/galaxybattery/PowerLogStore.kt" "$sourceRoot/java/kr/local/galaxybattery/ZeroPowerTracker.kt" "$sourceRoot/java/kr/local/galaxybattery/ThermalStatus.kt" "$sourceRoot/java/kr/local/galaxybattery/RefreshPolicy.kt" "$sourceRoot/java/kr/local/galaxybattery/HardwareTelemetry.kt"
 Check-Exit 'Kotlin parser compilation'
 $testClasspath = "$build/test-classes;$stdlib"
-& $javac -encoding UTF-8 --release 8 -classpath $testClasspath -d "$build/test-classes" "$projectRoot/tests/BatteryValuesTest.java" "$projectRoot/tests/DumpParserTest.java" "$projectRoot/tests/HistoryStoreTest.java" "$projectRoot/tests/PowerLogTest.java" "$projectRoot/tests/MonitorPolicyTest.java"
+& $javac -encoding UTF-8 --release 8 -classpath $testClasspath -d "$build/test-classes" "$projectRoot/tests/BatteryValuesTest.java" "$projectRoot/tests/DumpParserTest.java" "$projectRoot/tests/HistoryStoreTest.java" "$projectRoot/tests/PowerLogTest.java" "$projectRoot/tests/MonitorPolicyTest.java" "$projectRoot/tests/HardwareTelemetryTest.java"
 Check-Exit 'Test compilation'
 & $java -cp $testClasspath BatteryValuesTest
 Check-Exit 'Value validation tests'
@@ -58,6 +58,8 @@ Check-Exit 'History persistence tests'
 Check-Exit 'Power measurement and logging tests'
 & $java -cp $testClasspath MonitorPolicyTest
 Check-Exit 'Monitoring policy and zero-dip tests'
+& $java -cp $testClasspath HardwareTelemetryTest
+Check-Exit 'Hardware telemetry and discharge tests'
 
 & "$BuildToolsPath/aapt2.exe" compile --dir 'app/src/main/res' -o 'build/resources.zip'
 Check-Exit 'Resource compilation'

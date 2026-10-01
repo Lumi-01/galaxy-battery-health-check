@@ -8,7 +8,8 @@ import java.util.UUID
 class PowerLogStore(private val directory: File) {
     data class Session(val id: String, val started: Long, val ended: Long, val count: Long,
                        val minimum: Double?, val maximum: Double?, val samples: List<ChargePower.Sample>,
-                       val zeroState: ZeroPowerTracker.State, val peakThermal: Int)
+                       val zeroState: ZeroPowerTracker.State, val peakThermal: Int,
+                       val dischargeCount: Long = 0, val dischargeMinimum: Double? = null, val dischargeMaximum: Double? = null)
 
     @Throws(IOException::class)
     fun create(time: Long): String = synchronized(lock) {
@@ -63,7 +64,7 @@ class PowerLogStore(private val directory: File) {
                 if (sample.thermalStatus in 0..6) peakThermal = maxOf(peakThermal, sample.thermalStatus)
                 if (limit > 0) { points.addLast(sample); if (points.size > limit) points.removeFirst() }
             }
-            Session(id, started, ended, count, stats.minimum, stats.maximum, points.toList(), zero.state(), peakThermal)
+            Session(id, started, ended, count, stats.minimum, stats.maximum, points.toList(), zero.state(), peakThermal, stats.dischargeCount, stats.dischargeMinimum, stats.dischargeMaximum)
         }
     }
 

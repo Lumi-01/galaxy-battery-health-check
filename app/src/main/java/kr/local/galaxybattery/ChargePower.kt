@@ -19,6 +19,7 @@ object ChargePower {
     data class Sample @JvmOverloads constructor(val time: Long, val currentUa: Int, val voltageMv: Int, val level: Int,
                       val temperature: Int, val status: Int, val plugged: Int, val thermalStatus: Int = -1) {
         fun watts(): Double? = watts(currentUa, voltageMv)
+        fun dischargeWatts(): Double? = watts()?.takeIf { it < 0 }?.let { -it }
         fun chargingWatts(): Double? = watts()?.takeIf { plugged > 0 && (status == 2 || status == 5) && it >= 0 }
     }
 
@@ -26,7 +27,15 @@ object ChargePower {
         var minimum: Double? = null; private set
         var maximum: Double? = null; private set
         var chargingCount = 0L; private set
+        var dischargeCount = 0L; private set
+        var dischargeMinimum: Double? = null; private set
+        var dischargeMaximum: Double? = null; private set
         fun add(sample: Sample) {
+            sample.dischargeWatts()?.let {
+                dischargeCount++
+                dischargeMinimum = dischargeMinimum?.let { old -> minOf(old, it) } ?: it
+                dischargeMaximum = dischargeMaximum?.let { old -> maxOf(old, it) } ?: it
+            }
             sample.chargingWatts()?.let {
                 minimum = minimum?.let { old -> minOf(old, it) } ?: it
                 maximum = maximum?.let { old -> maxOf(old, it) } ?: it
