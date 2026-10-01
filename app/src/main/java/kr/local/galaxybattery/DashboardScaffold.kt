@@ -8,6 +8,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
 import android.os.Build
+import android.util.TypedValue
 import android.widget.*
 
 /** Owns page navigation and insets; pages stay mounted to preserve scroll and query state. */
@@ -28,18 +29,21 @@ class DashboardScaffold(private val activity: Activity, palette: AppPalette, blu
         titles.forEach { title ->
             val content = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(20), dp(22), dp(20), dp(100))
+                setPadding(dp(AppUi.PAGE_MARGIN), dp(22), dp(AppUi.PAGE_MARGIN), dp(100))
             }
             val scroll = ScrollView(activity).apply {
                 isFillViewport = true; clipToPadding = false
+                // Do not reserve a scrollbar gutter beside cards: navigation shares these edges.
+                scrollBarStyle = View.SCROLLBARS_OUTSIDE_OVERLAY; isVerticalScrollBarEnabled = false
                 addView(content)
                 setOnScrollChangeListener { _, _, _, _, _ -> refreshBackdrop() }
             }
             host.addView(scroll, FrameLayout.LayoutParams(-1, -1))
             val heading = LinearLayout(activity).apply { gravity = Gravity.CENTER_VERTICAL }
             val headingText = TextView(activity).apply {
-                text = title; textSize = 27f; setTextColor(palette.foreground)
-                if (title == "배터리 사이클 체크") textSize = 24f
+                text = title; textSize = 24f; setTextColor(palette.foreground)
+                setSingleLine(true); setAutoSizeTextTypeUniformWithConfiguration(18, 24, 1, TypedValue.COMPLEX_UNIT_SP)
+                setHorizontallyScrolling(false)
                 setTypeface(Typeface.DEFAULT, Typeface.BOLD)
             }
             heading.addView(headingText, LinearLayout.LayoutParams(0, -2, 1f))
@@ -48,10 +52,10 @@ class DashboardScaffold(private val activity: Activity, palette: AppPalette, blu
             scrolls.add(scroll); pages.add(content)
         }
         root.addView(navigation, FrameLayout.LayoutParams(-1, dp(64), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-            leftMargin = dp(20); rightMargin = dp(20); bottomMargin = dp(12)
+            leftMargin = dp(AppUi.PAGE_MARGIN); rightMargin = dp(AppUi.PAGE_MARGIN); bottomMargin = dp(12)
         })
         root.addView(settingsButton, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP or Gravity.END).apply {
-            rightMargin = dp(20); topMargin = dp(22)
+            rightMargin = dp(AppUi.PAGE_MARGIN); topMargin = dp(22)
         })
         root.setOnApplyWindowInsetsListener { view, insets ->
             if (Build.VERSION.SDK_INT >= 30) {

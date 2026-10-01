@@ -1,1 +1,1 @@
-3e0f773c2d8a4a7fae689bfa4f8a8ee52ab245f9c36b80502236c799fe6ea154  galaxy-battery-0.5.3.apk
+6e138b7922e002b53457c58fd0b25ea7e761df30f6dff3ac33683e7a45a0af74  galaxy-battery-0.5.4.apk

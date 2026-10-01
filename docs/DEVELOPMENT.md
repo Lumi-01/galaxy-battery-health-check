@@ -12,6 +12,7 @@
 
 | 파일 | 역할 |
 |---|---|
+| [AppUi.kt](../app/src/main/java/kr/local/galaxybattery/AppUi.kt) | 카드·메뉴 공통 여백, 버튼 높이·배경, 팝업 폭 |
 | [DashboardScaffold.kt](../app/src/main/java/kr/local/galaxybattery/DashboardScaffold.kt) | 3개 페이지, 하단 메뉴, 시스템 바 여백, 페이지 전환 |
 | [FrostedNavigation.kt](../app/src/main/java/kr/local/galaxybattery/FrostedNavigation.kt) | 둥근 메뉴, 선택 표시, 배경만 캡처해 블러 적용 |
 | [FrostedSettingsButton.kt](../app/src/main/java/kr/local/galaxybattery/FrostedSettingsButton.kt) | 페이지 위에 떠 있는 작은 설정 버튼과 배경 블러 |
@@ -96,7 +97,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 이후 소스만 수정했다면 `build.ps1`만 다시 실행하면 됩니다.
 
-- APK: `dist/galaxy-battery-0.5.2.apk`
+- APK: `dist/galaxy-battery-0.5.4.apk`
 - 체크섬: `dist/SHA256SUMS.txt`
 - 로컬 서명키: `.tools/diagnostic.keystore`
 

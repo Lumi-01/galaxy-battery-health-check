@@ -14,15 +14,16 @@ class PowerGraphView(context: Context, private val palette: AppPalette = AppPale
     private var samples: List<ChargePower.Sample> = emptyList()
     private var screenEvents: List<ScreenTimeline.Event> = emptyList()
     private var observedEnd = 0L
+    private var preview = false
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val density = resources.displayMetrics.density
     private var selected: ChargePower.Sample? = null
     private var touchX = 0f
     private var touchY = 0f
     var onSelection: ((ChargePower.Sample) -> Unit)? = null
-    @JvmOverloads fun setScreenEvents(values: List<ScreenTimeline.Event>, end: Long = 0L) {
-        if (screenEvents == values && observedEnd == end) return
-        screenEvents = values; observedEnd = end; invalidate()
+    @JvmOverloads fun setScreenEvents(values: List<ScreenTimeline.Event>, end: Long = 0L, isPreview: Boolean = false) {
+        if (screenEvents == values && observedEnd == end && preview == isPreview) return
+        screenEvents = values; observedEnd = end; preview = isPreview; invalidate()
     }
     private fun endTime(start: Long) = maxOf(start + 1000, samples.lastOrNull()?.time ?: 0L,
         screenEvents.maxOfOrNull { it.time } ?: 0L, observedEnd)
@@ -80,7 +81,10 @@ class PowerGraphView(context: Context, private val palette: AppPalette = AppPale
         val gap = RefreshPolicy.graphGapMs(samples.map { it.time })
         samples.zipWithNext().forEach { (a, b) ->
             val aw = a.watts(); val bw = b.watts()
-            if (aw != null && bw != null && b.time - a.time in 1..gap) {
+            // Preview polling pauses with the Activity. Do not interpolate across
+            // an unmeasured screen-off interval; recordings keep their real samples.
+            val unmeasured = preview && off.any { it.start < b.time && it.end > a.time }
+            if (aw != null && bw != null && b.time - a.time in 1..gap && !unmeasured) {
                 paint.color = if (bw >= 0) palette.accent else palette.negative
                 canvas.drawLine(x(a.time), y(aw), x(b.time), y(bw), paint)
             }

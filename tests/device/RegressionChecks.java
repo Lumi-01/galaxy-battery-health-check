@@ -24,6 +24,16 @@ public class RegressionChecks extends Instrumentation {
         float density=getTargetContext().getResources().getDisplayMetrics().density;
         int color=bitmap.getPixel(location[0]+toggle.getControl().getWidth()/2,location[1]+toggle.getControl().getHeight()/2-(int)(12*density));bitmap.recycle(); Bundle detail=new Bundle();detail.putString("pixel",Integer.toHexString(color)+" @ "+location[0]+","+location[1]+" size "+toggle.getControl().getWidth()+","+toggle.getControl().getHeight());sendStatus(2,detail);return color;
     }
+    void checkButtons(View view,int height){
+        if(view.getVisibility()!=View.VISIBLE)return;
+        if(view instanceof Button)check(view.getHeight()==height,"Action button height: "+((Button)view).getText()+" = "+view.getHeight());
+        if(view instanceof ViewGroup){ViewGroup g=(ViewGroup)view;for(int i=0;i<g.getChildCount();i++)checkButtons(g.getChildAt(i),height);}
+    }
+    void checkTextFits(View view){
+        if(view.getVisibility()!=View.VISIBLE)return;
+        if(view instanceof TextView){TextView t=(TextView)view;if(t.getLayout()!=null)for(int i=0;i<t.getLayout().getLineCount();i++)check(t.getLayout().getLineWidth(i)<=t.getWidth()-t.getCompoundPaddingLeft()-t.getCompoundPaddingRight()+1,"Core text fits: "+t.getText());}
+        if(view instanceof ViewGroup){ViewGroup g=(ViewGroup)view;for(int i=0;i<g.getChildCount();i++)checkTextFits(g.getChildAt(i));}
+    }
     void idle(){waitForIdleSync();SystemClock.sleep(300);}
     @Override public void onStart(){
         Activity activity=null;
@@ -69,6 +79,74 @@ public class RegressionChecks extends Instrumentation {
                 final ThermalStatusView[] thermal=new ThermalStatusView[1];
                 runOnMainSync(()->{thermal[0]=new ThermalStatusView(a,AppPalette.Companion.forDark(false));thermal[0].setStatus(0,1.1f,telemetry.getLatest().getCooling(),1,"Shizuku",1,1);});
                 check(thermal[0].getContentDescription().toString().contains("1개 작동") && thermal[0].getContentDescription().toString().contains("OS 제한 보고 없음"),"OS zero must not hide active kernel cooling signals");
+            }else if(mode.equals("preview")){
+                final Activity a=activity;
+                DashboardScaffold dashboard=(DashboardScaffold)field(a,"dashboard");
+                runOnMainSync(()->{new AppSettings(a).setPowerSeconds(60);dashboard.select(1);});idle();
+                check(ChargeMonitorService.Companion.getSnapshot().getId()==null,"Preview must not start a recording");
+                int count=((Collection<?>)field(a,"previewSamples")).size();
+                AtomicBoolean done=new AtomicBoolean(false);BroadcastReceiver receiver=new BroadcastReceiver(){public void onReceive(Context c,Intent i){done.set(true);}};
+                getTargetContext().registerReceiver(receiver,new IntentFilter("kr.local.galaxybattery.REGRESSION_DONE"),Context.RECEIVER_EXPORTED);
+                Bundle ready=new Bundle();ready.putString("ready","preview");sendStatus(1,ready);
+                long deadline=SystemClock.elapsedRealtime()+45000;
+                while(!done.get()&&SystemClock.elapsedRealtime()<deadline)SystemClock.sleep(100);
+                getTargetContext().unregisterReceiver(receiver);idle();
+                Collection<ScreenTimeline.Event> events=(Collection<ScreenTimeline.Event>)field(a,"previewScreenEvents");
+                List<ScreenTimeline.Interval> off=ScreenTimeline.intervals(new ArrayList<>(events),0,System.currentTimeMillis());
+                check(off.size()==1 && off.get(0).getEnd()-off.get(0).getStart()>=1000,"Activity captures screen OFF/ON while stopped");
+                PowerGraphView graph=(PowerGraphView)field(a,"powerGraph");
+                check(((List<?>)field(graph,"screenEvents")).size()==events.size(),"Preview graph receives the screen timeline");
+                check((Boolean)field(graph,"preview"),"Preview must break interpolation across screen-off intervals");
+                check(((Collection<?>)field(a,"previewSamples")).size()==count,"Screen state updates without fabricating power samples");
+                check(!ChargeMonitorService.Companion.getSnapshot().getActive(),"Screen OFF/ON must not activate recording");
+                runOnMainSync(()->new AppSettings(a).setPowerSeconds(5));
+            }else if(mode.equals("layout")){
+                final Activity a=activity;
+                DashboardScaffold dashboard=(DashboardScaffold)field(a,"dashboard");
+                HardwareMonitorView monitor=(HardwareMonitorView)field(a,"hardwareMonitor");
+                HardwareTelemetry telemetry=new HardwareTelemetry();ArrayList<HardwareTelemetry.Frame> frames=new ArrayList<>();
+                for(int sample=1;sample<=3;sample++){
+                    StringBuilder raw=new StringBuilder("stat|cpu "+sample*300+" 0 0 "+sample*500+"\n");
+                    for(int core=0;core<8;core++)raw.append("stat|cpu"+core+" "+sample*(30+core)+" 0 0 "+sample*(70-core)+"\ncore|"+core+"|1\nfreq|"+core+"|"+(1200+core*320)+"\n");
+                    telemetry.describe(raw.toString(),"layout fixture",System.currentTimeMillis()+sample*2000);frames.add(telemetry.getLatest());
+                }
+                for(int page=0;page<3;page++){
+                    final int index=page;runOnMainSync(()->dashboard.select(index));idle();
+                    runOnMainSync(()->{
+                        try {
+                            View nav=dashboard.getNavigation();int[] n=new int[2];nav.getLocationOnScreen(n);
+                            LinearLayout content=dashboard.getPages().get(index);int[] c=new int[2];content.getLocationOnScreen(c);
+                            check(n[0]==c[0]+content.getPaddingLeft(),"Menu left edge matches cards on page "+index);
+                            check(n[0]+nav.getWidth()==c[0]+content.getWidth()-content.getPaddingRight(),"Menu right edge matches cards on page "+index);
+                            checkButtons(content,AppUi.INSTANCE.dp(a,48));
+                            if(index==1)for(int i=0;i<monitor.getChildCount();i++)check(monitor.getChildAt(i).getWidth()==nav.getWidth(),"Hardware cards share menu width");
+                        }catch(Exception e){throw new RuntimeException(e);}
+                    });
+                }
+                runOnMainSync(()->{
+                    try{
+                        dashboard.select(1);Method stop=a.getClass().getDeclaredMethod("stopHardware");stop.setAccessible(true);stop.invoke(a);
+                        ((Handler)field(a,"refreshHandler")).removeCallbacksAndMessages(null);
+                        new AppSettings(a).setCpuCores(true);monitor.setFrames(frames,"layout fixture");
+                    }catch(Exception e){throw new RuntimeException(e);}
+                });idle();
+                runOnMainSync(()->{
+                    try{
+                        checkTextFits((View)monitor.getChildAt(0));checkTextFits((View)monitor.getChildAt(1));
+                        LinearLayout details=(LinearLayout)field(monitor,"cpuDetails");check(details.getChildCount()==4,"8 cores occupy 4 rows");
+                        for(int i=0;i<4;i++){
+                            LinearLayout row=(LinearLayout)details.getChildAt(i);check(row.getChildCount()==2,"Two cores in each row");
+                            check(Math.abs(row.getChildAt(0).getWidth()-row.getChildAt(1).getWidth())<=1,"Pair widths match");
+                            check(row.getChildAt(0).getHeight()==row.getChildAt(1).getHeight(),"Pair heights match");
+                            checkTextFits(row);
+                        }
+                    }catch(Exception e){throw new RuntimeException(e);}
+                });
+                final AlertDialog[] dialog=new AlertDialog[1];
+                runOnMainSync(()->dialog[0]=AppUi.INSTANCE.show(new AlertDialog.Builder(a).setTitle("Layout check").setMessage("Width").setPositiveButton("Close",null).create()));idle();
+                int expected=AppUi.INSTANCE.dp(a,Math.min(a.getResources().getConfiguration().screenWidthDp-40,560));
+                check(dialog[0].getWindow().getDecorView().getWidth()==expected,"Dialog uses the shared outer width");
+                runOnMainSync(()->{dialog[0].dismiss();new AppSettings(a).setCpuCores(false);});
             }else if(mode.equals("thermal")){
                 DashboardScaffold dashboard=(DashboardScaffold)field(activity,"dashboard");
                 runOnMainSync(()->dashboard.select(1));SystemClock.sleep(700);

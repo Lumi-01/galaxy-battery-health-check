@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.widget.*
@@ -48,7 +49,7 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         gpu.addView(OneUiToggle(context, palette, "GPU 코어별 보기", "기기에서 제공하는 정보 확인", settings.gpuCores) {
             settings.gpuCores = it; gpuDetails.visibility = if (it) VISIBLE else GONE
         })
-        gpuDetails = label(gpu, "현재 조회 방식은 GPU 전체 사용률과 클럭만 제공해요. GPU 코어별 그래프는 표시할 수 없어요.", 12, palette.muted)
+        gpuDetails = label(gpu, "현재 조회 방식은 GPU 전체 사용률과 클럭만 제공해요.\nGPU 코어별 그래프는 표시할 수 없어요.", 12, palette.muted)
         gpuDetails.visibility = if (settings.gpuCores) VISIBLE else GONE
 
         val temperatures = card()
@@ -63,15 +64,11 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         })
         temperatures.addView(sensorDetails)
 
-        footer = label(this, "${settings.hardwareSeconds}초마다 갱신 · 최근 120개 · 화면을 보는 동안 측정", 12, palette.muted)
+        footer = label(this, "${settings.hardwareSeconds}초마다 갱신\n최근 120개 표시\n화면을 보는 동안 측정", 12, palette.muted)
         footer.setPadding(dp(4), dp(16), dp(4), dp(8))
-        val connection = Button(context).apply {
-            text = "Shizuku 연결 · 권한 확인"; isAllCaps = false; textSize = 13f
-            setTextColor(palette.accent); minHeight = 0; minimumHeight = 0
-            background = shape(palette.actionSurface, 24); setOnClickListener { connect() }
-        }
-        addView(connection, LayoutParams(-1, dp(48)))
-        label(this, "읽지 못한 값은 —로 표시해요. Shizuku 연결 후 읽을 수 있는 항목이 늘어날 수 있어요.", 12, palette.muted)
+        val connection = AppUi.action(context, palette, "Shizuku 연결 · 권한 확인", clicked = connect)
+        addView(connection, LayoutParams(-1, dp(AppUi.ACTION_HEIGHT)))
+        label(this, "읽지 못한 값은 —로 표시해요.\nShizuku 연결 후 읽을 수 있는 항목이 늘어날 수 있어요.", 12, palette.muted)
             .setPadding(dp(4), dp(12), dp(4), dp(4))
         renderCores(); renderSensors()
     }
@@ -83,17 +80,17 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         cpuSummary.clock.text = clockRange(clocks)
         cpuSummary.usage.text = percent(latest.cpuTotal)
         cpuSummary.temperature.text = temperature(latest.cpuTemperature?.value)
-        cpuSummary.note.text = latest.cpuTemperature?.let { "온도 센서 · ${it.name}" } ?: ""
+        cpuSummary.note.text = latest.cpuTemperature?.let { "온도 센서\n${it.name}" } ?: ""
         cpuSummary.note.visibility = if (latest.cpuTemperature != null) VISIBLE else GONE
         gpuSummary.clock.text = frequency(latest.gpuClockMHz)
         gpuSummary.usage.text = percent(latest.gpu)
         gpuSummary.temperature.text = temperature(latest.gpuTemperature?.value)
-        gpuSummary.note.text = latest.gpuTemperature?.let { "온도 센서 · ${it.name}" } ?: ""
+        gpuSummary.note.text = latest.gpuTemperature?.let { "온도 센서\n${it.name}" } ?: ""
         gpuSummary.note.visibility = if (latest.gpuTemperature != null) VISIBLE else GONE
         cpuTemperature.text = temperature(latest.cpuTemperature?.value)
         gpuTemperature.text = temperature(latest.gpuTemperature?.value)
         val time = SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(latest.time))
-        footer.text = "$source · ${settings.hardwareSeconds}초마다 갱신\n$time 업데이트 · 최근 120개 · 이 화면에서만 측정"
+        footer.text = "조회 출처 $source\n업데이트 $time\n${settings.hardwareSeconds}초마다 갱신\n최근 120개 표시\n이 화면에서만 측정"
         renderCores(); renderSensors()
     }
     fun setBatteryTemperature(value: Double?) { batteryTemperature.text = temperature(value) }
@@ -105,13 +102,19 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         if (coreBlocks.keys.toList() != ids || cpuDetails.childCount == 0) {
             cpuDetails.removeAllViews(); coreBlocks.clear()
             if (ids.isEmpty()) label(cpuDetails, "코어 정보를 읽을 수 없어요.", 13, palette.muted)
-            ids.forEach { id ->
-                val container = LinearLayout(context).apply {
-                    orientation = VERTICAL; setPadding(dp(14), dp(14), dp(14), dp(14))
-                    background = shape(palette.background, 20)
+            ids.chunked(2).forEach { pair ->
+                val row = LinearLayout(context).apply { orientation = HORIZONTAL; isBaselineAligned = false }
+                cpuDetails.addView(row, LayoutParams(-1, -2).apply { topMargin = dp(12) })
+                pair.forEachIndexed { column, id ->
+                    val container = LinearLayout(context).apply {
+                        orientation = VERTICAL; setPadding(dp(10), dp(12), dp(10), dp(12))
+                        background = shape(palette.background, 20)
+                    }
+                    row.addView(container, LayoutParams(0, -2, 1f).apply { if (column > 0) marginStart = dp(8) })
+                    coreBlocks[id] = graph(container, "CPU $id", "", true, id)
                 }
-                cpuDetails.addView(container, LayoutParams(-1, -2).apply { topMargin = dp(12) })
-                coreBlocks[id] = graph(container, "CPU $id", "코어 ${id + 1}", true, id)
+                // Keep the last odd core at half width rather than stretching its card.
+                if (pair.size == 1) row.addView(View(context), LayoutParams(0, 0, 1f).apply { marginStart = dp(8) })
             }
         }
         coreBlocks.forEach { (id, block) ->
@@ -120,8 +123,7 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
             block.clock.text = frequency(if (offline) null else latest.cpuClockMHz[id])
             block.usage.text = if (offline) "오프라인" else percent(latest.cpu[id])
             block.temperature.text = temperature(latest.cpuTemperatures[id])
-            block.note.text = if (offline) "현재 코어가 꺼져 있어요." else ""
-            block.note.visibility = if (offline) VISIBLE else GONE
+            block.note.visibility = GONE // Offline state is shown in the usage row without resizing the card.
         }
     }
     private fun renderSensors() {
@@ -158,18 +160,28 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         else -> 2
     }
     private fun graph(parent: LinearLayout, title: String, subtitle: String, cpu: Boolean, core: Int? = null): GraphBlock {
-        label(parent, title, if (core == null) 20 else 16, palette.foreground, true)
-        label(parent, subtitle, 12, palette.muted).setPadding(0, dp(2), 0, dp(6))
+        label(parent, title, if (core == null) 20 else 14, palette.foreground, true)
+        if (subtitle.isNotBlank()) label(parent, subtitle, 12, palette.muted).setPadding(0, dp(2), 0, dp(6))
         val graph = UsageGraphView(context, palette, cpu, core)
-        parent.addView(graph, LayoutParams(-1, dp(if (core == null) 120 else 115)).apply { topMargin = dp(4); bottomMargin = dp(12) })
-        val metrics = LinearLayout(context).apply { orientation = HORIZONTAL; isBaselineAligned = false }
+        parent.addView(graph, LayoutParams(-1, dp(if (core == null) 120 else 88)).apply { topMargin = dp(6); bottomMargin = dp(if (core == null) 12 else 6) })
+        val metrics = LinearLayout(context).apply { orientation = VERTICAL; isBaselineAligned = false }
         parent.addView(metrics)
         fun metric(title: String): TextView {
-            val cell = LinearLayout(context).apply { orientation = VERTICAL }
-            metrics.addView(cell, LayoutParams(0, -2, 1f))
-            label(cell, title, 11, palette.muted)
-            return label(cell, "—", if (core == null) 16 else 14, palette.foreground, true).apply {
-                maxLines = 2; setPadding(0, dp(4), dp(4), dp(4))
+            val compact = core != null
+            // Separate metric rows keep long aggregate clock ranges away from usage and temperature.
+            val row = LinearLayout(context).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; minimumHeight = dp(if (compact) 24 else 32) }
+            metrics.addView(row, LayoutParams(-1, -2))
+            row.addView(TextView(context).apply {
+                text = title; textSize = if (compact) 10f else 12f
+                setTextColor(palette.muted); includeFontPadding = false
+            }, LayoutParams(-2, -2).apply { marginEnd = dp(if (compact) 4 else 12) })
+            return TextView(context).apply {
+                text = "—"; textSize = if (compact) 13f else 16f
+                setTextColor(palette.foreground); setTypeface(Typeface.DEFAULT, Typeface.BOLD)
+                gravity = Gravity.END; includeFontPadding = false; setSingleLine(true)
+                setHorizontallyScrolling(false)
+                setAutoSizeTextTypeUniformWithConfiguration(if (compact) 9 else 12, if (compact) 13 else 16, 1, TypedValue.COMPLEX_UNIT_SP)
+                row.addView(this, LayoutParams(0, -2, 1f))
             }
         }
         val clock = metric(if (cpu && core == null) "클럭 범위" else "클럭")
@@ -183,9 +195,7 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         val value = TextView(context).apply { text = "—"; textSize = 18f; setTextColor(palette.foreground); setTypeface(Typeface.DEFAULT, Typeface.BOLD) }
         row.addView(value); parent.addView(row); return value
     }
-    private fun card(): LinearLayout = LinearLayout(context).apply {
-        orientation = VERTICAL; setPadding(dp(20), dp(18), dp(20), dp(14))
-        background = shape(palette.card, 24)
+    private fun card(): LinearLayout = AppUi.card(context, palette).apply {
         this@HardwareMonitorView.addView(this, LayoutParams(-1, -2).apply { topMargin = dp(20) })
     }
     private fun divider(parent: LinearLayout) {
