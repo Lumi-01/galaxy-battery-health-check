@@ -38,6 +38,8 @@ class ChargeMonitorService : Service() {
     private var count = 0L
     private var minimum: Double? = null
     private var maximum: Double? = null
+    private var dischargeCount = 0L
+    private var dischargeMaximum: Double? = null
     private val points = ArrayDeque<ChargePower.Sample>()
     private val zero = ZeroPowerTracker()
 
@@ -45,7 +47,7 @@ class ChargeMonitorService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        val channel = NotificationChannel(CHANNEL, "충전 전력 실시간 업데이트", NotificationManager.IMPORTANCE_LOW).apply {
+        val channel = NotificationChannel(CHANNEL, "충전·방전 전력 실시간 업데이트", NotificationManager.IMPORTANCE_LOW).apply {
             description = "진행 중인 측정의 현재 전력만 표시합니다."
             setSound(null, null); enableVibration(false); setShowBadge(false)
         }
@@ -78,6 +80,7 @@ class ChargeMonitorService : Service() {
                 if (recovered != null && recovered.ended == 0L) {
                     sessionId = recovered.id; started = recovered.started; count = recovered.count
                     minimum = recovered.minimum; maximum = recovered.maximum; points.addAll(recovered.samples)
+                    dischargeCount = recovered.dischargeCount; dischargeMaximum = recovered.dischargeMaximum
                     zero.restore(recovered.zeroState)
                 } else {
                     if (savedId != null) try { store.finish(savedId, System.currentTimeMillis()) } catch (_: Exception) {}
@@ -108,11 +111,15 @@ class ChargeMonitorService : Service() {
             count++
             zero.add(value)
             points.addLast(value); if (points.size > 600) points.removeFirst()
+            value.dischargeWatts()?.let {
+                dischargeCount++
+                dischargeMaximum = dischargeMaximum?.let { old -> maxOf(old, it) } ?: it
+            }
             value.chargingWatts()?.let { watts ->
                 minimum = minimum?.let { minOf(it, watts) } ?: watts
                 maximum = maximum?.let { maxOf(it, watts) } ?: watts
             }
-            snapshot = Snapshot(true, sessionId, started, count, minimum, maximum, points.toList(), zeroState = zero.state())
+            snapshot = Snapshot(true, sessionId, started, count, minimum, maximum, points.toList(), zeroState = zero.state(), dischargeCount = dischargeCount, dischargeMaximum = dischargeMaximum)
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(value))
         } catch (_: Exception) { fail("측정이 중단됐어요. 저장 공간과 앱 실행 설정을 확인해 주세요.") }
     }
@@ -135,9 +142,9 @@ class ChargeMonitorService : Service() {
     private fun notification(value: ChargePower.Sample?): Notification {
         val watts = ChargePower.liveWatts(value, settings.showDischarge)
         val title = when {
-            value == null -> "충전 전력 측정 중"
+            value == null -> "충전·방전 측정 중"
             watts != null && watts < 0 -> "방전 ${ChargePower.text(watts)}"
-            value.plugged == 0 -> "충전기 연결 대기"
+            value.plugged == 0 -> "방전 기록 중"
             watts == null -> "충전 전력 확인 중"
             else -> ChargePower.text(watts)
         }
@@ -175,7 +182,8 @@ class ChargeMonitorService : Service() {
     data class Snapshot(val active: Boolean = false, val id: String? = null, val started: Long = 0L,
                         val count: Long = 0L, val minimum: Double? = null, val maximum: Double? = null,
                         val samples: List<ChargePower.Sample> = emptyList(), val error: String? = null,
-                        val zeroState: ZeroPowerTracker.State = ZeroPowerTracker().state())
+                        val zeroState: ZeroPowerTracker.State = ZeroPowerTracker().state(),
+                        val dischargeCount: Long = 0, val dischargeMaximum: Double? = null)
     companion object {
         @Volatile var snapshot = Snapshot(); private set
         fun forgetDeleted(ids: List<String>) {

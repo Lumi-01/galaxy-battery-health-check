@@ -43,5 +43,7 @@ class RemoteBatteryService : IRemoteBattery.Stub() {
         }
     }
 
+    override fun readHardware(): String = HardwareProbe.readSnapshot()
+
     override fun destroy() { exitProcess(0) }
 }

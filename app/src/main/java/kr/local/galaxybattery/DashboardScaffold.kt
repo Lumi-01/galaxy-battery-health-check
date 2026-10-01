@@ -28,7 +28,7 @@ class DashboardScaffold(private val activity: Activity, palette: AppPalette, blu
         titles.forEach { title ->
             val content = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding(dp(20), dp(22), dp(20), dp(80))
+                setPadding(dp(20), dp(22), dp(20), dp(100))
             }
             val scroll = ScrollView(activity).apply {
                 isFillViewport = true; clipToPadding = false
@@ -42,14 +42,14 @@ class DashboardScaffold(private val activity: Activity, palette: AppPalette, blu
                 setTypeface(Typeface.DEFAULT, Typeface.BOLD)
             }
             heading.addView(headingText, LinearLayout.LayoutParams(0, -2, 1f))
-            heading.addView(View(activity), LinearLayout.LayoutParams(dp(40), dp(40)))
-            content.addView(heading)
+            heading.addView(View(activity), LinearLayout.LayoutParams(dp(60), dp(48)))
+            content.addView(heading, LinearLayout.LayoutParams(-1, dp(48)))
             scrolls.add(scroll); pages.add(content)
         }
-        root.addView(navigation, FrameLayout.LayoutParams(-1, dp(56), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
-            leftMargin = dp(24); rightMargin = dp(24); bottomMargin = dp(8)
+        root.addView(navigation, FrameLayout.LayoutParams(-1, dp(64), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+            leftMargin = dp(20); rightMargin = dp(20); bottomMargin = dp(12)
         })
-        root.addView(settingsButton, FrameLayout.LayoutParams(dp(40), dp(40), Gravity.TOP or Gravity.END).apply {
+        root.addView(settingsButton, FrameLayout.LayoutParams(dp(48), dp(48), Gravity.TOP or Gravity.END).apply {
             rightMargin = dp(20); topMargin = dp(22)
         })
         root.setOnApplyWindowInsetsListener { view, insets ->

@@ -2,6 +2,8 @@
 
 [README로 돌아가기](../README.md)
 
+[화면·블러·하드웨어 표시·방전 기록 변경 및 검증 범위](UI_MONITORING_UPDATE.md)
+
 앱의 화면과 기능은 Kotlin으로 작성되어 있습니다. Android Studio용 Gradle 프로젝트와 Windows용 PowerShell 빌드 스크립트를 제공합니다.
 
 ## 코드 위치

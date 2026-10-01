@@ -2,13 +2,15 @@ package kr.local.galaxybattery
 
 import android.graphics.Color
 
+/** Material 3-inspired surface/container roles with a restrained green primary. */
 data class AppPalette(val background: Int, val card: Int, val foreground: Int, val muted: Int,
-                      val accent: Int, val grid: Int, val negative: Int, val navigation: Int, val selection: Int) {
+                      val accent: Int, val grid: Int, val negative: Int, val navigation: Int, val selection: Int,
+                      val onAccent: Int) {
     companion object {
         fun forDark(dark: Boolean): AppPalette = if (dark) AppPalette(
-            Color.rgb(12,19,28), Color.rgb(22,33,45), Color.rgb(238,245,250), Color.rgb(153,172,189),
-            Color.rgb(115,235,195), Color.rgb(44,58,69), Color.rgb(115,178,246), Color.rgb(31,42,55), Color.rgb(62,78,94))
-        else AppPalette(Color.rgb(243,245,248), Color.WHITE, Color.rgb(25,36,45), Color.rgb(82,101,116),
-            Color.rgb(0,116,88), Color.rgb(217,225,232), Color.rgb(42,99,183), Color.rgb(251,252,254), Color.rgb(222,229,234))
+            Color.parseColor("#101512"), Color.parseColor("#1C211E"), Color.parseColor("#E0E4DE"), Color.parseColor("#BFC9C0"),
+            Color.parseColor("#8ED5B2"), Color.parseColor("#404943"), Color.parseColor("#AAC7FF"), Color.parseColor("#29302B"), Color.parseColor("#294B3B"), Color.parseColor("#003824"))
+        else AppPalette(Color.parseColor("#F6FBF5"), Color.parseColor("#ECF2EC"), Color.parseColor("#181D19"), Color.parseColor("#414942"),
+            Color.parseColor("#246B4D"), Color.parseColor("#C1C9C1"), Color.parseColor("#365FAD"), Color.parseColor("#E6EEE7"), Color.parseColor("#B6EED0"), Color.WHITE)
     }
 }

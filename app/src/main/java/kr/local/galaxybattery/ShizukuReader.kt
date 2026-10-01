@@ -20,7 +20,7 @@ class ShizukuReader(activity: Activity, private val callback: Callback) {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private val args = Shizuku.UserServiceArgs(ComponentName(activity, RemoteBatteryService::class.java))
-        .daemon(false).processNameSuffix("battery_reader").tag("battery_read_only").version(3)
+        .daemon(false).processNameSuffix("battery_reader").tag("battery_read_only").version(4)
     private var closed = false
     var busy = false
         private set
