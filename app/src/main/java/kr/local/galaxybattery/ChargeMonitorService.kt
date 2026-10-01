@@ -2,6 +2,9 @@ package kr.local.galaxybattery
 
 import android.app.*
 import android.content.Intent
+import android.content.Context
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.os.*
@@ -42,6 +45,18 @@ class ChargeMonitorService : Service() {
     private var dischargeMaximum: Double? = null
     private val points = ArrayDeque<ChargePower.Sample>()
     private val zero = ZeroPowerTracker()
+    private val chargingMean = ChargePower.Mean()
+    private val dischargeMean = ChargePower.Mean()
+    private val screenEvents = ArrayDeque<ScreenTimeline.Event>()
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val event = ScreenTimeline.Event(System.currentTimeMillis(), if (intent.action == Intent.ACTION_SCREEN_OFF) ScreenTimeline.OFF else ScreenTimeline.ON)
+            if (!stopping && !worker.isShutdown) worker.execute {
+                if (!stopping && sessionId != null) try { rememberScreen(event) }
+                catch (_: Exception) { fail("화면 상태를 저장하지 못했어요. 저장 공간을 확인해 주세요.") }
+            }
+        }
+    }
 
     override fun onBind(intent: Intent?) = null
 
@@ -54,6 +69,9 @@ class ChargeMonitorService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         wakeLock = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "$packageName:power-monitor").apply { setReferenceCounted(false) }
         settings.preferences.registerOnSharedPreferenceChangeListener(settingsListener)
+        val screens = IntentFilter(Intent.ACTION_SCREEN_ON).apply { addAction(Intent.ACTION_SCREEN_OFF) }
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(screenReceiver, screens, RECEIVER_NOT_EXPORTED)
+        else registerReceiver(screenReceiver, screens)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -81,12 +99,19 @@ class ChargeMonitorService : Service() {
                     sessionId = recovered.id; started = recovered.started; count = recovered.count
                     minimum = recovered.minimum; maximum = recovered.maximum; points.addAll(recovered.samples)
                     dischargeCount = recovered.dischargeCount; dischargeMaximum = recovered.dischargeMaximum
+                    chargingMean.restore(recovered.chargingCount, recovered.chargingAverage)
+                    dischargeMean.restore(recovered.dischargeCount, recovered.dischargeAverage)
                     zero.restore(recovered.zeroState)
+                    screenEvents.addAll(recovered.screenEvents)
+                    // Never shade a process outage as a continuously observed screen-off period.
+                    rememberScreen(ScreenTimeline.Event(maxOf(recovered.lastSampleTime, recovered.screenEvents.maxOfOrNull { it.time } ?: started), ScreenTimeline.UNKNOWN))
                 } else {
                     if (savedId != null) try { store.finish(savedId, System.currentTimeMillis()) } catch (_: Exception) {}
                     started = System.currentTimeMillis(); sessionId = store.create(started)
                 }
                 preferences.edit().putString("session", sessionId).commit()
+                rememberScreen(ScreenTimeline.Event(System.currentTimeMillis(),
+                    if (getSystemService(PowerManager::class.java).isInteractive) ScreenTimeline.ON else ScreenTimeline.OFF))
             } catch (_: Exception) { fail("기록을 시작하지 못했어요. 저장 공간을 확인해 주세요.") }
         }
         worker.execute { sampleAndSchedule() }
@@ -111,17 +136,32 @@ class ChargeMonitorService : Service() {
             count++
             zero.add(value)
             points.addLast(value); if (points.size > 600) points.removeFirst()
+            trimScreenEvents()
             value.dischargeWatts()?.let {
+                dischargeMean.add(it)
                 dischargeCount++
                 dischargeMaximum = dischargeMaximum?.let { old -> maxOf(old, it) } ?: it
             }
             value.chargingWatts()?.let { watts ->
+                chargingMean.add(watts)
                 minimum = minimum?.let { minOf(it, watts) } ?: watts
                 maximum = maximum?.let { maxOf(it, watts) } ?: watts
             }
-            snapshot = Snapshot(true, sessionId, started, count, minimum, maximum, points.toList(), zeroState = zero.state(), dischargeCount = dischargeCount, dischargeMaximum = dischargeMaximum)
+            snapshot = Snapshot(true, sessionId, started, count, minimum, maximum, points.toList(), zeroState = zero.state(), dischargeCount = dischargeCount, dischargeMaximum = dischargeMaximum,
+                chargingAverage = chargingMean.average, dischargeAverage = dischargeMean.average, screenEvents = screenEvents.toList())
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(value))
         } catch (_: Exception) { fail("측정이 중단됐어요. 저장 공간과 앱 실행 설정을 확인해 주세요.") }
+    }
+
+    private fun rememberScreen(event: ScreenTimeline.Event) {
+        store.appendScreenEvent(sessionId ?: return, event)
+        screenEvents.addLast(event); trimScreenEvents()
+        snapshot = snapshot.copy(screenEvents = screenEvents.toList())
+    }
+    private fun trimScreenEvents() {
+        val first = points.peekFirst()?.time ?: return
+        // Keep the last state preceding the visible graph, including a long OFF interval.
+        while (screenEvents.size > 1 && screenEvents.elementAt(1).time <= first) screenEvents.removeFirst()
     }
 
     private fun fail(message: String) {
@@ -175,6 +215,7 @@ class ChargeMonitorService : Service() {
         worker.shutdown()
         nextSample?.cancel(false)
         settings.preferences.unregisterOnSharedPreferenceChangeListener(settingsListener)
+        unregisterReceiver(screenReceiver)
         snapshot = snapshot.copy(active = false)
         super.onDestroy()
     }
@@ -183,7 +224,9 @@ class ChargeMonitorService : Service() {
                         val count: Long = 0L, val minimum: Double? = null, val maximum: Double? = null,
                         val samples: List<ChargePower.Sample> = emptyList(), val error: String? = null,
                         val zeroState: ZeroPowerTracker.State = ZeroPowerTracker().state(),
-                        val dischargeCount: Long = 0, val dischargeMaximum: Double? = null)
+                        val dischargeCount: Long = 0, val dischargeMaximum: Double? = null,
+                        val chargingAverage: Double? = null, val dischargeAverage: Double? = null,
+                        val screenEvents: List<ScreenTimeline.Event> = emptyList())
     companion object {
         @Volatile var snapshot = Snapshot(); private set
         fun forgetDeleted(ids: List<String>) {

@@ -9,7 +9,9 @@ class PowerLogStore(private val directory: File) {
     data class Session(val id: String, val started: Long, val ended: Long, val count: Long,
                        val minimum: Double?, val maximum: Double?, val samples: List<ChargePower.Sample>,
                        val zeroState: ZeroPowerTracker.State, val peakThermal: Int,
-                       val dischargeCount: Long = 0, val dischargeMinimum: Double? = null, val dischargeMaximum: Double? = null)
+                       val dischargeCount: Long = 0, val dischargeMinimum: Double? = null, val dischargeMaximum: Double? = null,
+                       val chargingCount: Long = 0, val chargingAverage: Double? = null, val dischargeAverage: Double? = null,
+                       val screenEvents: List<ScreenTimeline.Event> = emptyList(), val lastSampleTime: Long = 0L)
 
     @Throws(IOException::class)
     fun create(time: Long): String = synchronized(lock) {
@@ -52,6 +54,7 @@ class PowerLogStore(private val directory: File) {
         val stats = ChargePower.Stats()
         val zero = ZeroPowerTracker()
         var peakThermal = -1
+        var lastSampleTime = 0L
         RandomAccessFile(file(id), "r").use { input ->
             val record = checkHeader(input)
             val started = input.readLong(); val ended = input.readLong()
@@ -60,11 +63,14 @@ class PowerLogStore(private val directory: File) {
                 val sample = ChargePower.Sample(input.readLong(), input.readInt(), input.readInt(), input.readInt(),
                     input.readInt(), input.readInt(), input.readInt(), if (record == RECORD) input.readInt() else -1)
                 stats.add(sample)
+                lastSampleTime = sample.time
                 zero.add(sample)
                 if (sample.thermalStatus in 0..6) peakThermal = maxOf(peakThermal, sample.thermalStatus)
                 if (limit > 0) { points.addLast(sample); if (points.size > limit) points.removeFirst() }
             }
-            Session(id, started, ended, count, stats.minimum, stats.maximum, points.toList(), zero.state(), peakThermal, stats.dischargeCount, stats.dischargeMinimum, stats.dischargeMaximum)
+            Session(id, started, ended, count, stats.minimum, stats.maximum, points.toList(), zero.state(), peakThermal,
+                stats.dischargeCount, stats.dischargeMinimum, stats.dischargeMaximum, stats.chargingCount,
+                stats.chargingAverage, stats.dischargeAverage, readScreenEvents(id), lastSampleTime)
         }
     }
 
@@ -80,6 +86,41 @@ class PowerLogStore(private val directory: File) {
         if (ids.contains(activeId)) throw IOException("Stop recording before deleting this session")
         val targets = ids.map { file(it) }
         targets.forEach { if (it.exists() && !it.delete()) throw IOException("Cannot delete power session") }
+        ids.map { screenFile(it) }.forEach { if (it.exists() && !it.delete()) throw IOException("Cannot delete screen events") }
+    }
+
+    /** A sidecar keeps all earlier .power record formats unchanged. Partial final events are recoverable. */
+    @Throws(IOException::class)
+    fun appendScreenEvent(id: String, event: ScreenTimeline.Event) = synchronized(lock) {
+        require(event.time >= 0 && event.state in ScreenTimeline.UNKNOWN..ScreenTimeline.ON)
+        RandomAccessFile(file(id), "r").use { power ->
+            checkHeader(power); power.seek(12)
+            if (power.readLong() != 0L) throw IOException("Session already ended")
+        }
+        RandomAccessFile(screenFile(id), "rw").use { out ->
+            if (out.length() == 0L) out.writeInt(SCREEN_MAGIC)
+            else { out.seek(0); if (out.length() < 4 || out.readInt() != SCREEN_MAGIC) throw IOException("Invalid screen events") }
+            val safeLength = 4 + ((out.length() - 4) / 12) * 12
+            out.setLength(safeLength); out.seek(safeLength)
+            out.writeLong(event.time); out.writeInt(event.state); out.fd.sync()
+        }
+    }
+    private fun screenFile(id: String): File { file(id); return File(directory, "$id.screen") }
+    private fun readScreenEvents(id: String): List<ScreenTimeline.Event> {
+        val target = screenFile(id)
+        if (!target.exists()) return emptyList()
+        // Damage to the optional timeline must never make existing power samples unreadable.
+        return try {
+            RandomAccessFile(target, "r").use { input ->
+                if (input.length() < 4 || input.readInt() != SCREEN_MAGIC) return emptyList()
+                val events = mutableListOf<ScreenTimeline.Event>()
+                repeatLong((input.length() - 4) / 12) {
+                    val time = input.readLong(); val state = input.readInt()
+                    if (time >= 0 && state in ScreenTimeline.UNKNOWN..ScreenTimeline.ON) events.add(ScreenTimeline.Event(time, state))
+                }
+                events
+            }
+        } catch (_: IOException) { emptyList() }
     }
 
     private fun file(id: String): File {
@@ -95,5 +136,5 @@ class PowerLogStore(private val directory: File) {
         }
     }
     private inline fun repeatLong(count: Long, action: () -> Unit) { var n = 0L; while (n++ < count) action() }
-    companion object { private val lock = Any(); private const val MAGIC = 0x47504232; private const val HEADER = 20L; private const val RECORD = 36L }
+    companion object { private val lock = Any(); private const val MAGIC = 0x47504232; private const val HEADER = 20L; private const val RECORD = 36L; private const val SCREEN_MAGIC = 0x47505331 }
 }

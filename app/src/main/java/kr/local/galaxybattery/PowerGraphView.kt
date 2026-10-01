@@ -12,12 +12,20 @@ import kotlin.math.ceil
 
 class PowerGraphView(context: Context, private val palette: AppPalette = AppPalette.forDark(AppSettings(context).isDark(context))) : View(context) {
     private var samples: List<ChargePower.Sample> = emptyList()
+    private var screenEvents: List<ScreenTimeline.Event> = emptyList()
+    private var observedEnd = 0L
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val density = resources.displayMetrics.density
     private var selected: ChargePower.Sample? = null
     private var touchX = 0f
     private var touchY = 0f
     var onSelection: ((ChargePower.Sample) -> Unit)? = null
+    @JvmOverloads fun setScreenEvents(values: List<ScreenTimeline.Event>, end: Long = 0L) {
+        if (screenEvents == values && observedEnd == end) return
+        screenEvents = values; observedEnd = end; invalidate()
+    }
+    private fun endTime(start: Long) = maxOf(start + 1000, samples.lastOrNull()?.time ?: 0L,
+        screenEvents.maxOfOrNull { it.time } ?: 0L, observedEnd)
     fun setSamples(values: List<ChargePower.Sample>) {
         if (samples == values) return
         samples = values
@@ -28,16 +36,24 @@ class PowerGraphView(context: Context, private val palette: AppPalette = AppPale
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val left = 44f * density; val right = width - 12f * density
-        val top = 16f * density; val bottom = height - 30f * density
+        val top = 24f * density; val bottom = height - 30f * density
         if (right <= left || bottom <= top) return
         val valid = samples.mapNotNull { it.watts() }
         val maximum = maxOf(5.0, ceil((valid.maxOrNull() ?: 0.0) / 5) * 5)
         val minimum = minOf(0.0, kotlin.math.floor((valid.minOrNull() ?: 0.0) / 5) * 5)
         val start = samples.firstOrNull()?.time ?: 0L
-        val end = maxOf(start + 1000, samples.lastOrNull()?.time ?: 1000L)
+        val end = endTime(start)
         fun x(time: Long) = left + ((time - start).toDouble() / (end - start) * (right - left)).toFloat()
         fun y(watts: Double) = bottom - ((watts - minimum) / (maximum - minimum) * (bottom - top)).toFloat()
+        val off = ScreenTimeline.intervals(screenEvents, start, end)
+        paint.color = (palette.muted and 0xFFFFFF) or (30 shl 24)
+        off.forEach { canvas.drawRect(x(it.start), top, x(it.end), bottom, paint) }
         paint.textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 10f, resources.displayMetrics)
+        if (off.isNotEmpty()) {
+            paint.color = palette.muted
+            canvas.drawRoundRect(left, 3 * density, left + 8 * density, 11 * density, 2 * density, 2 * density, paint)
+            canvas.drawText("화면 꺼짐 구간", left + 14 * density, 12 * density, paint)
+        }
         paint.strokeWidth = density
         for (step in 0..4) {
             val value = minimum + (maximum - minimum) * step / 4.0
@@ -87,7 +103,7 @@ class PowerGraphView(context: Context, private val palette: AppPalette = AppPale
                     parent?.requestDisallowInterceptTouchEvent(true)
                 }
                 val fraction = ((event.x - 44 * density) / (width - 56 * density)).coerceIn(0f, 1f)
-                val target = samples.first().time + ((samples.last().time - samples.first().time) * fraction).toLong()
+                val target = samples.first().time + ((endTime(samples.first().time) - samples.first().time) * fraction).toLong()
                 samples.minByOrNull { abs(it.time - target) }?.let { selected = it; onSelection?.invoke(it) }
                 invalidate(); return true
             }

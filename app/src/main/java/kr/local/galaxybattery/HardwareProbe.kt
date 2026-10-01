@@ -37,16 +37,6 @@ object HardwareProbe {
             // Retain zone identity: different physical sensors may share a name.
             if (raw != null && raw in -40000..150000) append("temp|${type.replace('|', '_').replace('\n', ' ')}|${raw / 1000.0}|${zone.name}\n")
         }
-        zones?.filter { it.name.matches(Regex("cooling_device[0-9]+")) }?.take(64)?.forEach { device ->
-            val type = read("${device.path}/type")?.take(80) ?: return@forEach
-            // Only named CPU/GPU/frequency devices are relevant here; a generic
-            // fan or battery cooling state must not be labelled CPU throttling.
-            if (!Regex("cpu|gpu|cpufreq|devfreq", RegexOption.IGNORE_CASE).containsMatchIn(type)) return@forEach
-            val state = read("${device.path}/cur_state")?.toLongOrNull()
-            val maximum = read("${device.path}/max_state")?.toLongOrNull()
-            if (state != null && maximum != null && maximum > 0 && state in 0..maximum)
-                append("cool|${type.replace('|', '_').replace('\n', ' ')}|$state|$maximum|${device.name}\n")
-        }
         val percent = read("/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage")?.toDoubleOrNull()
         val busyFields = read("/sys/class/kgsl/kgsl-3d0/gpubusy")?.split(Regex("\\s+"))
         val busy = busyFields?.takeIf { it.size == 2 }?.mapNotNull { it.toLongOrNull() }
@@ -58,5 +48,20 @@ object HardwareProbe {
         val gpuFrequency = listOf("/sys/class/kgsl/kgsl-3d0/gpuclk", "/sys/class/kgsl/kgsl-3d0/devfreq/cur_freq")
             .firstNotNullOfOrNull { read(it)?.toLongOrNull()?.takeIf { value -> value in 1..10000000000L } }
         if (gpuFrequency != null) append("gpufreq|${gpuFrequency / 1000000.0}\n")
+    }
+
+    /** Thermal-only polling avoids sampling CPU/GPU charts at the thermal interval. */
+    fun readCooling(): String = buildString {
+        val devices = try { File("/sys/class/thermal").listFiles() } catch (_: Exception) { null }
+        devices?.filter { it.name.matches(Regex("cooling_device[0-9]+")) }?.take(64)?.forEach { device ->
+            val type = read("${device.path}/type")?.take(80) ?: return@forEach
+            // Only named CPU/GPU/frequency devices are relevant here; a generic
+            // fan or battery cooling state must not be labelled CPU throttling.
+            if (!Regex("cpu|gpu|cpufreq|devfreq", RegexOption.IGNORE_CASE).containsMatchIn(type)) return@forEach
+            val state = read("${device.path}/cur_state")?.toLongOrNull()
+            val maximum = read("${device.path}/max_state")?.toLongOrNull()
+            if (state != null && maximum != null && maximum > 0 && state in 0..maximum)
+                append("cool|${type.replace('|', '_').replace('\n', ' ')}|$state|$maximum|${device.name}\n")
+        }
     }
 }

@@ -14,6 +14,12 @@ class OneUiSwitch(context: Context, private val palette: AppPalette) : CompoundB
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val density = resources.displayMetrics.density
     init { buttonDrawable = null; background = null; isFocusable = true; isClickable = true }
+    override fun setChecked(checked: Boolean) {
+        super.setChecked(checked)
+        // No stateful Drawable exists to invalidate this custom Canvas artwork.
+        // Redraw after row taps, native switch taps and restored checked states.
+        invalidate()
+    }
     override fun getAccessibilityClassName(): CharSequence = "android.widget.Switch"
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         setMeasuredDimension(resolveSize((56 * density).toInt(), widthMeasureSpec), resolveSize((48 * density).toInt(), heightMeasureSpec))

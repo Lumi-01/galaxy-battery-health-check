@@ -8,6 +8,8 @@ import android.view.Gravity
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Locale
+import java.text.SimpleDateFormat
+import java.util.Date
 
 /** A compact thermal summary; severity is named and numbered, never conveyed by color alone. */
 class ThermalStatusView(context: Context, private val palette: AppPalette) : LinearLayout(context) {
@@ -15,6 +17,7 @@ class ThermalStatusView(context: Context, private val palette: AppPalette) : Lin
     private val badge = TextView(context)
     private val load = TextView(context)
     private val signals = TextView(context)
+    private val updated = TextView(context)
     init {
         orientation = VERTICAL; setPadding(dp(14), dp(12), dp(14), dp(12))
         background = GradientDrawable().apply {
@@ -35,13 +38,15 @@ class ThermalStatusView(context: Context, private val palette: AppPalette) : Lin
         addView(row)
         addView(load.apply { textSize = 12f; setTextColor(palette.muted); setPadding(0, dp(10), 0, 0) })
         addView(signals.apply { textSize = 11f; setTextColor(palette.muted); setPadding(0, dp(5), 0, 0) })
+        addView(updated.apply { textSize = 11f; setTextColor(palette.muted); setPadding(0, dp(5), 0, 0) })
         addView(TextView(context).apply {
             text = "OS 단계와 실제 클럭 제한은 다를 수 있어요. 0단계만으로 쓰로틀링 없음을 확정하지 않아요."
             textSize = 11f; setTextColor(palette.muted); setPadding(0, dp(8), 0, 0)
         })
         setStatus(-1)
     }
-    fun setStatus(status: Int, headroom: Float? = null, cooling: List<HardwareTelemetry.Cooling> = emptyList()) {
+    fun setStatus(status: Int, headroom: Float? = null, cooling: List<HardwareTelemetry.Cooling> = emptyList(),
+                  statusTime: Long = 0L, coolingSource: String = "", coolingTime: Long = 0L, headroomTime: Long = 0L) {
         val known = status in 0..6
         state.text = ThermalStatus.label(status).substringBefore(" ·")
         badge.text = if (known) "${status}단계" else "—"
@@ -64,6 +69,8 @@ class ThermalStatusView(context: Context, private val palette: AppPalette) : Lin
             active.isEmpty() -> "추가 제한 신호 · 작동 중인 항목 없음"
             else -> "추가 제한 신호 · ${active.size}개 작동\n" + active.take(3).joinToString(" · ") { "${it.name} ${it.state}/${it.maximum}" }
         }
+        fun time(value: Long) = if (value > 0) SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(value)) else "확인 중"
+        updated.text = "OS ${time(statusTime)} · 열 부하 ${if (headroom == null) "확인 불가" else time(headroomTime)}\n제한 신호 ${time(coolingTime)} · ${coolingSource.ifBlank { "확인 중" }} · 10초마다 확인"
         contentDescription = "쓰로틀링, ${ThermalStatus.label(status)}, ${load.text}, ${signals.text}"
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density + .5f).toInt()

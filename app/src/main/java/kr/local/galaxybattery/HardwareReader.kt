@@ -11,11 +11,13 @@ import java.util.concurrent.Executors
 import rikka.shizuku.Shizuku
 
 /** Foreground-only telemetry; never requests permission automatically. */
-class HardwareReader(activity: Activity, private val callback: (String, String) -> Unit) {
+class HardwareReader(activity: Activity, private val thermalOnly: Boolean = false,
+                     private val callback: (String, String) -> Unit) {
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
     private val args = Shizuku.UserServiceArgs(ComponentName(activity, RemoteBatteryService::class.java))
-        .daemon(false).processNameSuffix("hardware_reader").tag("hardware_read_only").version(5)
+        .daemon(false).processNameSuffix(if (thermalOnly) "thermal_reader" else "hardware_reader")
+        .tag(if (thermalOnly) "thermal_read_only" else "hardware_read_only").version(6)
     private var bound = false
     private var remote: IRemoteBattery? = null
     private var active = false
@@ -63,12 +65,12 @@ class HardwareReader(activity: Activity, private val callback: (String, String) 
             var source = "앱 직접 읽기"
             var failedRemote = false
             val raw = try {
-                if (service != null) { source = "Shizuku"; service.readHardware() ?: "" }
-                else HardwareProbe.readSnapshot()
+                if (service != null) { source = "Shizuku"; (if (thermalOnly) service.readThermal() else service.readHardware()) ?: "" }
+                else localSnapshot()
             } catch (_: Exception) {
                 failedRemote = service != null
                 source = "앱 직접 읽기 · Shizuku 접근 실패"
-                HardwareProbe.readSnapshot()
+                localSnapshot()
             }
             main.post {
                 timeout?.let { main.removeCallbacks(it) }; timeout = null
@@ -81,6 +83,7 @@ class HardwareReader(activity: Activity, private val callback: (String, String) 
             }
         }
     }
+    private fun localSnapshot() = if (thermalOnly) HardwareProbe.readCooling() else HardwareProbe.readSnapshot()
     fun stop() {
         active = false; generation++
         timeout?.let { main.removeCallbacks(it) }; timeout = null

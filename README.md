@@ -2,13 +2,13 @@
 
 **충전 전력과 배터리 진단 기록을 확인하는 Android 앱, 배터리 사이클 체크입니다.** 현재 전력(W), 실시간 그래프, 화면이 꺼진 동안의 기록을 제공하며, Shizuku 또는 SysDump 로그로 갤럭시의 내부 배터리 정보를 확인할 수 있습니다.
 
-**[앱 다운로드 · v0.5.2](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.5.2.apk)** · **[Shizuku 설치·연결](docs/SHIZUKU_SETUP_KO.md)** · **[코드 수정·빌드](docs/DEVELOPMENT.md)**
+**[앱 다운로드 · v0.5.3](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.5.3.apk)** · **[Shizuku 설치·연결](docs/SHIZUKU_SETUP_KO.md)** · **[코드 수정·빌드](docs/DEVELOPMENT.md)**
 
 > 수명·사이클을 버튼으로 조회하려면 **Shizuku 연결이 필요합니다.** 기종과 펌웨어에 따라 정보를 읽지 못할 수 있으며, 이때는 로그 파일 분석을 사용할 수 있습니다.
 
 ## 설치하고 시작하기
 
-1. **휴대폰에서 [APK 다운로드](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.5.2.apk)**를 누릅니다.
+1. **휴대폰에서 [APK 다운로드](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.5.3.apk)**를 누릅니다.
 2. 다운로드 알림 또는 **내 파일 → 다운로드**에서 APK를 열어 설치합니다. 설치 권한 안내가 나오면 파일을 연 앱의 설치 권한을 허용합니다.
 3. **[Shizuku 연결 가이드](docs/SHIZUKU_SETUP_KO.md)**에 따라 Shizuku를 설치하고 시작합니다.
 4. 앱에서 **배터리 상태 확인**을 누르고, 처음 나타나는 Shizuku 권한 요청을 허용합니다.
@@ -17,7 +17,7 @@
 
 이 저장소에서 받은 이전 APK는 앱을 삭제하지 않고 업데이트할 수 있습니다. 다운로드 파일의 체크섬은 [SHA256SUMS.txt](dist/SHA256SUMS.txt)에서 확인할 수 있습니다.
 
-> v0.5.2 소스와 APK의 화면·하드웨어 표시·열 제한 변경은 [변경 안내](docs/UI_MONITORING_UPDATE.md)를 참고하세요.
+> v0.5.3에서 토글 표시를 수정하고, 쓰로틀링 확인 시각·화면 꺼짐 구간·충방전 평균 전력을 추가했습니다. [변경 안내](docs/UI_MONITORING_UPDATE.md)
 
 ## 앱 화면
 
@@ -32,6 +32,10 @@ Android 15 에뮬레이터에서 촬영했습니다. **‘UI 예시 · 샘플 �
 | <img src="docs/screenshots/sensors-example-light.png" width="240" alt="개별 온도 센서 목록 예시"> | <img src="docs/screenshots/settings-light.png" width="240" alt="갱신 간격과 배경 블러 설정"> | <img src="docs/screenshots/hardware-dark.png" width="240" alt="다크 모드의 기기 모니터링"> |
 
 추가 화면: [충전 모니터링](docs/screenshots/charging-light.png) · [테마 선택 팝업](docs/screenshots/theme-menu-light.png) · [기록·공유 — 에뮬레이터 검증 기록](docs/screenshots/history-dark.png)
+
+**충방전 평균과 화면 꺼짐 구간 예시** — 아래 전력 기록은 UI 검증용 샘플 데이터입니다. 청록색은 충전, 보라색은 방전이며, 회색 음영은 화면 꺼짐 구간입니다.
+
+<img src="docs/screenshots/power-history-example-light.png" width="300" alt="테스트 데이터로 확인한 충방전 평균과 화면 꺼짐 구간 음영">
 
 ## 화면과 설정
 
@@ -81,6 +85,8 @@ Live Update는 알림을 기반으로 하는 시스템 기능이므로 연결된
 
 - **표시하는 W는 배터리 기준 순전력입니다.** 휴대폰 자체 소비와 변환 손실이 반영되므로 충전기·USB 포트의 출력이나 ‘45W 충전’ 협상 값을 직접 측정한 값과 다릅니다. Android가 제공하는 전류 부호에 따라 양수는 유입, 음수는 방전입니다. [BatteryManager](https://developer.android.com/reference/android/os/BatteryManager#BATTERY_PROPERTY_CURRENT_NOW)
 - **최고·최저는 측정 전체의 유효한 충전 값으로 집계합니다.** 충전기 연결 상태와 충전 상태를 확인하며, 유효한 0W도 최저 값에 포함합니다. 미지원 값과 음수 방전 값은 충전 최고·최저에서 제외합니다.
+- **평균 W는 전체 기록의 유효한 샘플을 충전·방전별로 나눠 계산한 산술평균입니다.** 충전 평균에는 유효한 0W도 포함하고, 방전 평균은 음수 전력의 크기를 표시합니다. 미지원 값은 제외합니다. 측정 간격을 바꾸면 샘플의 밀도가 달라지므로 시간 가중 평균이나 충전 에너지(Wh)와는 다릅니다.
+- **화면 꺼짐 구간은 그래프에 회색 음영으로 표시합니다.** 측정 샘플과 별도로 화면 켜짐·꺼짐 이벤트 시각을 저장하므로 긴 측정 간격 사이의 짧은 화면 꺼짐도 기록합니다. 상세 기록에는 구간별 시작·종료 시각과 총 시간이 표시됩니다. 이전 기록에는 없던 화면 상태를 추정해 넣지 않으며, 앱 프로세스가 중단된 동안의 상태는 확인 불가로 구분합니다.
 - **그래프는 최근 최대 600개 측정을 표시합니다.** 그래프를 터치하면 그 시점의 W·잔량·시각을 확인할 수 있습니다. 기록 전체를 저장하고, 최고·최저는 그래프의 표시 구간과 관계없이 전체 측정을 기준으로 계산합니다. 누락되거나 중단된 구간은 선으로 잇지 않습니다.
 - **화면 꺼짐 측정은 CPU 깨우기 잠금을 사용합니다.** 측정 중에는 전력 소비가 늘 수 있습니다. 기록이 자주 중단되면 앱의 배터리 설정을 ‘제한 없음’으로 바꾸고 삼성 절전 앱 목록에서 제외해 주세요. 강제 종료·재부팅·시스템 종료 후에는 다시 시작해야 하며, 이전에 저장한 기록은 남습니다.
 
@@ -120,7 +126,7 @@ Live Update는 알림을 기반으로 하는 시스템 기능이므로 연결된
 
 [삼성 Members 운영진의 설명](https://r1.community.samsung.com/t5/galaxy-s/phone-battery-health/td-p/37000087)에 따르면 **ASOC는 충전량 보정과 관련된 값**, **BSOH는 원래 설계 용량 대비 배터리 건강 상태를 나타내는 값**이며, 배터리 건강 상태를 판단할 때는 BSOH가 더 적합합니다. 이는 지원 포럼의 설명이며, 기종·펌웨어별 내부 계산식까지 공개한 기술 명세는 아닙니다.
 
-**현재 v0.5.2는 ‘배터리 진단’ 카드에 ASOC를 표시하고, BSOH는 ‘측정 근거’에 별도로 표시합니다.** 카드의 ASOC를 그대로 ‘남은 수명 %’ 또는 정확한 용량 유지율로 해석하지 마세요. 두 값은 서로 대체하거나 평균 내지 않습니다. 상태 표시줄의 현재 배터리 잔량과도 구분해야 합니다.
+**현재 v0.5.3는 ‘배터리 진단’ 카드에 ASOC를 표시하고, BSOH는 ‘측정 근거’에 별도로 표시합니다.** 카드의 ASOC를 그대로 ‘남은 수명 %’ 또는 정확한 용량 유지율로 해석하지 마세요. 두 값은 서로 대체하거나 평균 내지 않습니다. 상태 표시줄의 현재 배터리 잔량과도 구분해야 합니다.
 
 ## 수치를 해석할 때
 
@@ -136,7 +142,7 @@ Live Update는 알림을 기반으로 하는 시스템 기능이므로 연결된
 - **앱 최소 실행 환경:** Android 8.0 이상
 - **PC 없이 Shizuku를 연결하는 무선 디버깅 방식:** Android 11 이상
 - **개발 기준 기기:** Galaxy S25 · One UI 9.0 베타
-- **검증:** 값 처리·로그 분석·전력 계산·기록 저장 및 삭제·하드웨어 정보 169개 검증과 APK 빌드·서명 검증 통과
+- **검증:** 값 처리·로그 분석·전력 계산·기록 저장 및 삭제·하드웨어 정보 186개 검증과 APK 빌드·서명 검증 통과. 에뮬레이터에서 토글 그림의 실제 ON/OFF 색상, OS 열 단계 변화, 60초 측정 사이의 짧은 화면 꺼짐 저장도 확인했습니다.
 
 모든 갤럭시에서 상세 정보를 읽을 수 있다고 보장하지 않습니다. **S25 베타에서 Shizuku를 통한 상세 값 조회 성공 여부는 아직 실기기 확인이 필요합니다.** Shizuku 연결 성공과 배터리 필드 제공 여부는 별개입니다.
 

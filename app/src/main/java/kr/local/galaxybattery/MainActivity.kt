@@ -124,7 +124,9 @@ class MainActivity : Activity() {
         hardwareTelemetry.reset()
     }
     private fun updateThermal() {
-        if (::thermalView.isInitialized) thermalView.setStatus(thermalMonitor.status, thermalMonitor.headroom, hardwareTelemetry.latest.cooling)
+        if (::thermalView.isInitialized) thermalView.setStatus(thermalMonitor.status, thermalMonitor.headroom,
+            thermalMonitor.cooling, thermalMonitor.statusUpdatedAt,
+            thermalMonitor.coolingSource, thermalMonitor.coolingUpdatedAt, thermalMonitor.headroomUpdatedAt)
     }
 
     override fun onCreate(state: Bundle?) {
@@ -207,6 +209,7 @@ class MainActivity : Activity() {
         refreshHandler.removeCallbacksAndMessages(null)
         shizuku?.close()
         hardwareReader?.close()
+        thermalMonitor.close()
         fileWorker.shutdownNow()
         historyWorker.shutdown()
         super.onDestroy()
@@ -292,7 +295,7 @@ class MainActivity : Activity() {
         text(evidence, "측정 근거 · 결과 공유", 18, FG, true)
         text(evidence, "값의 출처와 해석을 확인하고 현재 결과를 공유하세요.", 13, MUTED)
         button(evidence, "측정 근거 보기 · 공유") { showReport() }
-        text(outer, "기록은 이 기기에만 저장돼요. 원본 덤프는 보관하지 않아요.\nv0.5.2", 12, MUTED)
+        text(outer, "기록은 이 기기에만 저장돼요. 원본 덤프는 보관하지 않아요.\nv0.5.3", 12, MUTED)
         setContentView(dashboard.root)
     }
 
@@ -353,7 +356,7 @@ class MainActivity : Activity() {
         dashboard.refreshBackdrop()
 
         report = buildString {
-            append("Galaxy Battery v0.5.2 / Kotlin\n조회 시간: $time\n")
+            append("Galaxy Battery v0.5.3 / Kotlin\n조회 시간: $time\n")
             append("Model: ${Build.MODEL}\nAndroid: ${Build.VERSION.RELEASE}\nSDK: ${Build.VERSION.SDK_INT}\n")
             append("Build: ${Build.DISPLAY}\nSecurity patch: ${Build.VERSION.SECURITY_PATCH}\n")
             append("\n공식 사이클 원본: ${rawCycle ?: "미제공"}\n플랫폼 SOH 속성 10: ${healthProperty.raw}\n")
@@ -417,7 +420,11 @@ class MainActivity : Activity() {
         val maximum = if (state.id != null) state.maximum else previewStats.maximum
         val dischargeCount = if (state.id != null) state.dischargeCount else previewStats.dischargeCount
         val dischargePeak = if (state.id != null) state.dischargeMaximum else previewStats.dischargeMaximum
-        powerStats.text = "충전 최고 ${ChargePower.text(maximum)} · 최저 ${ChargePower.text(minimum)}\n방전 ${dischargeCount}개 · 최대 ${ChargePower.text(dischargePeak)}"
+        val chargeAverage = if (state.id != null) state.chargingAverage else previewStats.chargingAverage
+        val dischargeAverage = if (state.id != null) state.dischargeAverage else previewStats.dischargeAverage
+        powerStats.text = "충전 평균 ${ChargePower.text(chargeAverage)} · 최고 ${ChargePower.text(maximum)} · 최저 ${ChargePower.text(minimum)}\n방전 평균 ${ChargePower.text(dischargeAverage)} · 최대 ${ChargePower.text(dischargePeak)} · ${dischargeCount}개"
+        powerGraph.setScreenEvents(if (state.id != null) state.screenEvents else emptyList(),
+            if (state.active) System.currentTimeMillis() else 0L)
         if (state.active) { recordingWasActive = true; powerStarting = false }
         if (state.error != null) powerStarting = false
         monitorButton.text = if (state.active) "측정 종료 · 기록 저장" else if (powerStarting) "측정 시작 중…" else "측정 시작"
@@ -535,6 +542,7 @@ class MainActivity : Activity() {
                         else if (ChargeMonitorService.snapshot.active && ChargeMonitorService.snapshot.id == id) "측정 중" else "종료 시각 미기록 · 중단된 측정"
                     text(content, "${session.count}개 측정 · $end", 13, MUTED)
                     text(content, "최고 ${ChargePower.text(session.maximum)}\n최저 ${ChargePower.text(session.minimum)}", 21, FG, true)
+                    text(content, "충전 평균 ${ChargePower.text(session.chargingAverage)} · 방전 평균 ${ChargePower.text(session.dischargeAverage)}", 16, ACCENT, true)
                     text(content, "방전 ${session.dischargeCount}개 측정 · 최대 ${ChargePower.text(session.dischargeMaximum)}\n최소 ${ChargePower.text(session.dischargeMinimum)} · 전력 크기 기준", 16, palette.negative, true)
                     text(content, "0W 이후 회복 ${session.zeroState.count}회", 18, FG, true)
                     text(content, "최고 열 제한 단계 · ${ThermalStatus.label(session.peakThermal)}", 13, MUTED)
@@ -542,10 +550,17 @@ class MainActivity : Activity() {
                         text(content, "${date(event.started)} ${clock(event.started)}\n→ ${date(event.recovered)} ${clock(event.recovered)} · 0W ${event.samples}개 측정", 13, FG)
                     }
                     text(content, "0W 구간의 시작·회복은 측정 시각 기준이에요. 연결 해제·미지원·음수 값은 제외해요. 구간은 최근 200건을 표시하고 횟수는 전체 기록 기준이에요.", 12, MUTED)
+                    val screenEnd = if (session.ended > 0) session.ended else if (ChargeMonitorService.snapshot.active && ChargeMonitorService.snapshot.id == id) System.currentTimeMillis() else maxOf(session.lastSampleTime, session.screenEvents.maxOfOrNull { it.time } ?: 0L)
                     val graph = PowerGraphView(this, palette).apply { setSamples(session.samples) }
+                    graph.setScreenEvents(session.screenEvents, screenEnd)
                     content.addView(graph, LinearLayout.LayoutParams(-1, dp(220)))
                     val selection = text(content, "최근 최대 600개를 표시해요. 터치해서 해당 시점의 값을 확인하세요.", 12, MUTED)
                     graph.onSelection = { selection.text = sampleCaption(it) }
+                    val off = ScreenTimeline.intervals(session.screenEvents, session.started, screenEnd)
+                    text(content, if (session.screenEvents.isEmpty()) "이전 기록에는 화면 상태가 저장되지 않았어요."
+                        else if (off.isEmpty()) "관측된 화면 꺼짐 구간이 없어요."
+                        else "화면 꺼짐 ${off.size}구간 · 총 ${off.sumOf { it.end - it.start } / 1000}초\n" + off.takeLast(30).joinToString("\n") { "${date(it.start)} ${clock(it.start)} → ${date(it.end)} ${clock(it.end)}" }, 12, MUTED)
+                    text(content, "음영은 화면 켜짐·꺼짐 이벤트 기준이에요. 전력 값은 설정한 간격으로 측정하며, 평균은 전체 기록의 유효한 측정값을 충전·방전별로 따로 계산해요. 방전 평균은 전력 크기(W)예요.", 12, MUTED)
                     text(content, "최고·최저는 전체 기록 중 충전 중인 유효한 값으로 계산해요. 실제 0W도 최저 값에 포함됩니다. 음수는 방전 전력이에요.", 12, MUTED)
                     AlertDialog.Builder(this).setTitle(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(Date(session.started)))
                         .setView(ScrollView(this).apply { addView(content) })
@@ -605,6 +620,7 @@ class MainActivity : Activity() {
                         val end = if (session.ended > 0) clock(session.ended) else if (ChargeMonitorService.snapshot.active && ChargeMonitorService.snapshot.id == session.id) "측정 중" else "중단된 측정"
                         text(it, "${clock(session.started)} → $end · ${session.count}개 측정", 12, MUTED)
                         text(it, "최고 ${ChargePower.text(session.maximum)}    최저 ${ChargePower.text(session.minimum)}", 16, ACCENT, true)
+                        text(it, "충전 평균 ${ChargePower.text(session.chargingAverage)} · 방전 평균 ${ChargePower.text(session.dischargeAverage)}", 14, FG)
                         text(it, "방전 ${session.dischargeCount}개 · 최대 ${ChargePower.text(session.dischargeMaximum)}", 15, palette.negative, true)
                         text(it, "0W 이후 회복 ${session.zeroState.count}회 · 최고 열 제한 ${session.peakThermal.takeIf { v -> v >= 0 }?.let { v -> "${v}단계" } ?: "미기록"}", 13, FG)
                         button(it, "그래프 · 구간 보기") { loadPowerSession(session.id) }
@@ -787,6 +803,7 @@ class MainActivity : Activity() {
         val power = interval("충전 속도 갱신 · 기록 간격", settings.powerSeconds)
         val battery = interval("기본 배터리 상태 갱신 간격", settings.batterySeconds)
         val hardware = interval("CPU · GPU 사용률 갱신 간격", settings.hardwareSeconds)
+        text(content, "쓰로틀링 정보는 10초마다 확인하고, OS 단계 변화는 즉시 반영해요.", 12, MUTED)
         text(content, "상세 ASOC·BSOH 조회는 ‘배터리 상태 확인’ 버튼으로 실행해요. 짧은 기록 간격은 배터리 사용량과 저장 공간을 늘릴 수 있어요.", 12, MUTED)
         val blur = OneUiToggle(this, palette, "배경 블러", "하단 메뉴 · 설정 버튼", settings.blur)
         content.addView(blur)

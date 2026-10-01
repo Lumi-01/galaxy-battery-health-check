@@ -24,6 +24,10 @@ object ChargePower {
     }
 
     class Stats {
+        private val chargingMean = Mean()
+        private val dischargeMean = Mean()
+        val chargingAverage: Double? get() = chargingMean.average
+        val dischargeAverage: Double? get() = dischargeMean.average
         var minimum: Double? = null; private set
         var maximum: Double? = null; private set
         var chargingCount = 0L; private set
@@ -32,15 +36,29 @@ object ChargePower {
         var dischargeMaximum: Double? = null; private set
         fun add(sample: Sample) {
             sample.dischargeWatts()?.let {
+                dischargeMean.add(it)
                 dischargeCount++
                 dischargeMinimum = dischargeMinimum?.let { old -> minOf(old, it) } ?: it
                 dischargeMaximum = dischargeMaximum?.let { old -> maxOf(old, it) } ?: it
             }
             sample.chargingWatts()?.let {
+                chargingMean.add(it)
                 minimum = minimum?.let { old -> minOf(old, it) } ?: it
                 maximum = maximum?.let { old -> maxOf(old, it) } ?: it
                 chargingCount++
             }
+        }
+    }
+
+    /** Arithmetic mean of valid samples; restore uses the whole-session count, not the graph tail. */
+    class Mean {
+        private var count = 0L
+        private var sum = 0.0
+        val average: Double? get() = if (count > 0) sum / count else null
+        fun add(value: Double) { if (value.isFinite() && value >= 0) { sum += value; count++ } }
+        fun restore(samples: Long, average: Double?) {
+            count = if (samples > 0 && average != null && average.isFinite() && average >= 0) samples else 0
+            sum = if (count > 0) average!! * count else 0.0
         }
     }
 }

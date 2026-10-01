@@ -26,6 +26,7 @@
 | [ChargePower.kt](../app/src/main/java/kr/local/galaxybattery/ChargePower.kt) | µA·mV에서 W 계산, 미지원 값 검증, 충전 최고·최저 집계 |
 | [PowerSampler.kt](../app/src/main/java/kr/local/galaxybattery/PowerSampler.kt) | Android 전류·전압·잔량·온도·기기 열 제한 단계 읽기 |
 | [PowerLogStore.kt](../app/src/main/java/kr/local/galaxybattery/PowerLogStore.kt) | 측정별 전력 기록 영구 저장, 중단된 마지막 쓰기 복구, 열람·삭제 |
+| [ScreenTimeline.kt](../app/src/main/java/kr/local/galaxybattery/ScreenTimeline.kt) | 화면 이벤트를 그래프 구간으로 변환, 확인 불가 공백 처리 |
 | [PowerGraphView.kt](../app/src/main/java/kr/local/galaxybattery/PowerGraphView.kt) | Canvas 전력 그래프와 터치로 시점 선택 |
 | [UsageGraphView.kt](../app/src/main/java/kr/local/galaxybattery/UsageGraphView.kt) | CPU·GPU 전체 및 CPU 개별 코어의 단일선 그래프, 누락 구간 처리 |
 | [HardwareMonitorView.kt](../app/src/main/java/kr/local/galaxybattery/HardwareMonitorView.kt) | 전체·코어별 그래프 카드, 하단 수치, 센서별 온도 행 |
@@ -115,12 +116,14 @@ GitHub에 올라온 APK는 프로젝트 관리자의 로컬 키로 서명되어 
 
 ## 값 처리와 검증
 
+토글의 실제 화면 색상과 화면 꺼짐 이벤트 저장은 [기기 회귀 검사](../tests/device/README.md)로 별도 확인합니다. 이 검증용 APK는 배포 앱에 포함하지 않습니다.
+
 PowerShell 빌드는 다음 검증을 실행합니다.
 
 - [BatteryValuesTest.java](../tests/BatteryValuesTest.java): 기본 값 처리 21개
 - [DumpParserTest.java](../tests/DumpParserTest.java): 로그 분석 35개
 - [HistoryStoreTest.java](../tests/HistoryStoreTest.java): 재실행 후 유지, 정렬, 저장 실패, 개별·전체 삭제 등 11개
-- [PowerLogTest.java](../tests/PowerLogTest.java): W 계산, 부호·미지원 값, 최고·최저, 기록 재열람·부분 쓰기 복구·삭제 등 33개
+- [PowerLogTest.java](../tests/PowerLogTest.java): W 계산, 평균 복원, 화면 이벤트 구간·저장·부분 쓰기 복구·삭제, 이전 기록 호환 등 50개
 - [MonitorPolicyTest.java](../tests/MonitorPolicyTest.java): 0W 구간·복원·제외 조건, 이전 파일 호환, 열 단계와 열 부하 해석, 방전 칩, 설정·그래프 간격 등 29개
 - [HardwareTelemetryTest.java](../tests/HardwareTelemetryTest.java): CPU 전체·코어별 델타, 클럭·센서 식별·제한 신호, 잘못된 값, 방전 기록 전체 집계 등 40개
 - APK 서명·정렬·매니페스트 확인
@@ -143,6 +146,8 @@ API 36의 `setShortCriticalText()`에 현재 W만 전달하고, `android.request
 
 새 `.power` 파일의 magic은 `0x47504232`입니다. 헤더는 20바이트, 샘플은 36바이트이며 기존 32바이트 형식 `0x47504231`도 읽기·추가 쓰기를 지원합니다. 예전 형식에는 열 제한 단계가 없어 `-1`(미기록)로 읽습니다. 0W 구간은 파일 전체 샘플을 재생해 계산하며 별도 파일 없이 재실행 후에도 유지합니다. 최근 200개 구간과 전체 횟수를 관리하고, 진행 중인 구간 상태도 복원합니다.
 
+v0.5.3은 같은 세션 ID의 `.screen` 파일에 화면 이벤트를 추가합니다. magic `0x47505331`의 4바이트 헤더와 12바이트(time: Long, state: Int) 레코드이며 상태는 -1(확인 불가), 0(꺼짐), 1(켜짐)입니다. 부분 쓰기는 다음 추가 시 잘라 복구하고, 화면 파일 손상은 전력 기록 열람을 막지 않습니다. 서비스 시작 시 현재 화면 상태를 저장하고 `ACTION_SCREEN_ON/OFF`를 별도로 기록합니다. 프로세스 복원 때 마지막 관측 이후를 확인 불가로 닫습니다. `ScreenTimeline`은 그래프 시간 범위로 구간을 잘라 그립니다. 충방전 평균은 파일 전체에서 산술평균을 계산하고, 서비스 복원 시 전체 유효 개수와 평균을 사용합니다.
+
 기본 배터리 조회와 전력 조회는 별도의 Handler 타이머로 작동합니다. 서비스는 매 주기 설정을 읽고, 기록 간격 변경 시 다음 샘플을 다시 예약해 같은 세션을 유지합니다. 상세 조회는 자동 타이머에 연결하지 않습니다. `PowerSampler`에서 API 29 이상 시스템 열 상태를 읽고, UI·그래프 선택·기록에 전달합니다. 기기 전체 열 상태를 충전 제한 원인으로 단정하지 마세요.
 
 CPU·GPU 조회도 별도 Handler 타이머를 사용합니다. `AppSettings.hardwareSeconds`의 기본값은 2초입니다. 모니터링 화면을 벗어나면 타이머와 연결을 정리하며, 복귀 시 CPU 차이 계산 기준을 다시 잡습니다. `HardwareTelemetry.Frame`의 nullable 사용률을 그래프에 전달하므로 미지원·첫 측정·잘못된 카운터는 0%로 변환되지 않습니다. CPU 전체는 `/proc/stat`의 집계 행을 우선하고, 없으면 모든 온라인 코어의 유효한 시간 차이를 가중 합산합니다. 최근 120개 샘플은 메모리에서만 유지합니다. 코어별 옵션은 기본 꺼짐이며 CPU·GPU·센서 설정을 각각 저장합니다. 현재 GPU 인터페이스는 전체 정보만 제공하여 코어별 옵션에서는 안내를 표시합니다.
@@ -150,6 +155,8 @@ CPU·GPU 조회도 별도 Handler 타이머를 사용합니다. `AppSettings.har
 CPU 클럭은 `cpuinfo_cur_freq`, 미지원 시 `scaling_cur_freq`를 읽어 kHz에서 MHz로 변환합니다. 후자는 정책의 요청 클럭일 수 있으므로 정확한 실시간 하드웨어 주파수라고 단정하지 않습니다. GPU KGSL/devfreq 클럭은 Hz에서 MHz로 변환합니다. 최대 지원 주파수를 현재 클럭으로 대체하지 않습니다. CPU·GPU 전체 온도 센서를 우선 선택하고, 없으면 해당 센서의 최고값과 이름을 표시합니다. 명시적인 코어 이름만 코어 온도로 매핑합니다. 같은 이름의 서로 다른 thermal zone도 ID를 유지하여 각각 표시합니다.
 
 `ThermalMonitor`는 OS 상태 변경 리스너와 10초 주기의 열 부하 조회를 사용합니다. 앱을 재생성해도 호출 시각을 유지하여 API를 과도하게 조회하지 않으며, 종료 시 리스너와 타이머를 해제합니다. 전력 기록의 마지막 샘플로 실시간 OS 상태를 덮어쓰지 않습니다. 0단계는 OS 제한 보고 없음으로 표현합니다. 커널 제한 장치의 상태는 OS 단계와 구분하고, 열 부하나 클럭만으로 확정 단계를 만들지 않습니다. 기록 파일에는 기존의 OS 단계만 저장하여 이전 파일 형식을 유지합니다.
+
+v0.5.3의 커널 제한 신호는 `HardwareProbe.readCooling()`과 별도의 10초 `HardwareReader(thermalOnly=true)`로 읽습니다. CPU·GPU 그래프 타이머와 독립적이며 `IRemoteBattery.readThermal()`은 고정된 읽기 경로만 제공합니다. Shizuku 서비스는 별도 tag/process와 version 6을 사용해 이전 Binder 프로세스가 새 호출을 받지 않게 합니다. `setChecked()`의 명시적 `invalidate()`는 상태별 Drawable이 없는 커스텀 토글의 필수 갱신 경로입니다.
 
 테마는 Activity 생성 전에 적용하며 기본값은 시스템 설정입니다. 아이콘의 foreground는 launcher 안전 영역 안에 두고, 마스크 모양은 Android 런처에 맡깁니다. 하단 블러는 page host만 캡처하므로 메뉴 자체를 재귀 캡처하지 않으며, 라벨과 아이콘은 블러 위에 선명하게 그립니다.
 
