@@ -22,6 +22,8 @@ class HardwareReader(activity: Activity, private val callback: (String, String) 
     private var busy = false
     private var generation = 0
     private var bindingStarted = 0L
+    private var closed = false
+    private var timeout: Runnable? = null
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder) {
             if (!active || !bound) return
@@ -30,9 +32,9 @@ class HardwareReader(activity: Activity, private val callback: (String, String) 
         }
         override fun onServiceDisconnected(name: ComponentName) { remote = null }
     }
-    fun start() { if (!active) { active = true; generation++ }; poll() }
+    fun start() { if (closed) return; if (!active) { active = true; generation++ }; poll() }
     fun poll() {
-        if (!active || busy) return
+        if (closed || !active || busy) return
         if (bound && remote == null && android.os.SystemClock.elapsedRealtime() - bindingStarted > 5000) {
             try { Shizuku.unbindUserService(args, connection, true) } catch (_: RuntimeException) {}
             bound = false
@@ -46,6 +48,17 @@ class HardwareReader(activity: Activity, private val callback: (String, String) 
         val service = if (authorized) remote else null
         busy = true
         val current = generation
+        var timedOut = false
+        timeout = Runnable {
+            if (!closed && active && busy && current == generation) {
+                timedOut = true
+                // Destroying a stalled Shizuku process releases its Binder call.
+                // Keep busy until that worker returns so no unbounded queue is built.
+                if (bound) try { Shizuku.unbindUserService(args, connection, true) } catch (_: RuntimeException) {}
+                bound = false; remote = null
+                callback("", "하드웨어 조회 시간 초과 · 다시 확인 중")
+            }
+        }.also { main.postDelayed(it, 5000) }
         worker.execute {
             var source = "앱 직접 읽기"
             var failedRemote = false
@@ -58,19 +71,21 @@ class HardwareReader(activity: Activity, private val callback: (String, String) 
                 HardwareProbe.readSnapshot()
             }
             main.post {
+                timeout?.let { main.removeCallbacks(it) }; timeout = null
                 busy = false
-                if (failedRemote && current == generation) {
+                if (!closed && failedRemote && current == generation) {
                     if (bound) try { Shizuku.unbindUserService(args, connection, true) } catch (_: RuntimeException) {}
                     bound = false; remote = null
                 }
-                if (active && current == generation) callback(raw, source)
+                if (!closed && !timedOut && active && current == generation) callback(raw, source)
             }
         }
     }
     fun stop() {
         active = false; generation++
+        timeout?.let { main.removeCallbacks(it) }; timeout = null
         if (bound) try { Shizuku.unbindUserService(args, connection, true) } catch (_: RuntimeException) {}
         bound = false; remote = null
     }
-    fun close() { stop(); worker.shutdownNow(); main.removeCallbacksAndMessages(null) }
+    fun close() { closed = true; stop(); worker.shutdownNow(); main.removeCallbacksAndMessages(null) }
 }

@@ -40,6 +40,13 @@ class MainActivity : Activity() {
     private lateinit var hardwareDetails: TextView
     private val hardwareTelemetry = HardwareTelemetry()
     private var hardwareReader: HardwareReader? = null
+    private lateinit var cpuGraph: UsageGraphView
+    private lateinit var gpuGraph: UsageGraphView
+    private lateinit var cpuLegend: TextView
+    private lateinit var gpuLegend: TextView
+    private lateinit var cpuTemperature: TextView
+    private lateinit var gpuTemperature: TextView
+    private val hardwareFrames = java.util.ArrayDeque<HardwareTelemetry.Frame>()
     private lateinit var zeroView: TextView
     private val previewZero = ZeroPowerTracker()
     private var historyCategory = 0
@@ -99,6 +106,25 @@ class MainActivity : Activity() {
             refreshHandler.postDelayed(this, settings.powerSeconds * 1000L)
         }
     }
+    private val hardwareRefresh = object : Runnable {
+        override fun run() {
+            if (!registered || dashboard.selected != 1 || isFinishing || isDestroyed) return
+            hardwareReader?.poll()
+            refreshHandler.postDelayed(this, settings.hardwareSeconds * 1000L)
+        }
+    }
+
+    private fun startHardware() {
+        refreshHandler.removeCallbacks(hardwareRefresh)
+        hardwareTelemetry.reset()
+        hardwareReader?.start()
+        refreshHandler.postDelayed(hardwareRefresh, settings.hardwareSeconds * 1000L)
+    }
+    private fun stopHardware() {
+        refreshHandler.removeCallbacks(hardwareRefresh)
+        hardwareReader?.stop()
+        hardwareTelemetry.reset()
+    }
 
     override fun onCreate(state: Bundle?) {
         val style = if (settings.isDark(this)) "AppTheme" else "AppTheme.Light"
@@ -130,6 +156,17 @@ class MainActivity : Activity() {
         hardwareReader = HardwareReader(this) { raw, source ->
             if (registered && dashboard.selected == 1) {
                 hardwareDetails.text = hardwareTelemetry.describe(raw, source)
+                val frame = hardwareTelemetry.latest
+                hardwareFrames.addLast(frame)
+                if (hardwareFrames.size > 120) hardwareFrames.removeFirst()
+                val frames = hardwareFrames.toList()
+                cpuGraph.setFrames(frames); gpuGraph.setFrames(frames)
+                cpuLegend.text = cpuGraph.legend(frame); gpuLegend.text = gpuGraph.legend(frame)
+                fun temperature(kind: String, sensor: HardwareTelemetry.Sensor?): String =
+                    sensor?.let { "$kind 온도 · ${String.format(Locale.US, "%.1f°C", it.value)}\n센서: ${it.name}" }
+                        ?: "$kind 온도 · 확인 불가"
+                cpuTemperature.text = temperature("CPU", hardwareTelemetry.cpuTemperature)
+                gpuTemperature.text = temperature("GPU", hardwareTelemetry.gpuTemperature)
                 dashboard.refreshBackdrop()
             }
         }
@@ -158,14 +195,13 @@ class MainActivity : Activity() {
         refreshHandler.postDelayed(liveRefresh, settings.batterySeconds * 1000L)
         refreshHandler.removeCallbacks(powerRefresh)
         renderPower()
-        if (dashboard.selected == 1) hardwareReader?.start()
+        if (dashboard.selected == 1) startHardware()
         refreshHandler.postDelayed(powerRefresh, settings.powerSeconds * 1000L)
         if (dashboard.selected == 2) refreshRecords()
     }
 
     override fun onStop() {
-        hardwareReader?.stop()
-        hardwareTelemetry.reset()
+        stopHardware()
         refreshHandler.removeCallbacks(liveRefresh)
         refreshHandler.removeCallbacks(powerRefresh)
         if (registered) { unregisterReceiver(receiver); registered = false }
@@ -184,8 +220,7 @@ class MainActivity : Activity() {
     private fun buildUi() {
         dashboard = DashboardScaffold(this, palette, settings.blur, { showSettings() }) {
             if (it == 2 && ::recordsContainer.isInitialized) refreshRecords()
-            hardwareTelemetry.reset()
-            if (it == 1 && registered) hardwareReader?.start() else hardwareReader?.stop()
+            if (it == 1 && registered) startHardware() else stopHardware()
         }
         var outer = dashboard.pages[0]
         text(outer, "${Build.MODEL}  ·  Android ${Build.VERSION.RELEASE}", 13, MUTED)
@@ -251,8 +286,30 @@ class MainActivity : Activity() {
         val hardware = card(outer)
         text(hardware, "기기 사용량 · 온도", 18, FG, true)
         batteryTemperature = text(hardware, "배터리 온도 · 확인 중", 18, GREEN, true)
+        val temperatureRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        hardware.addView(temperatureRow, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8); bottomMargin = dp(14) })
+        fun temperatureLabel(value: String): TextView = TextView(this).apply {
+            text = value; textSize = 13f; setTextColor(FG)
+            temperatureRow.addView(this, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        cpuTemperature = temperatureLabel("CPU 온도 · 확인 중")
+        gpuTemperature = temperatureLabel("GPU 온도 · 확인 중")
+        text(hardware, "전체 온도 센서를 우선 사용하고, 없으면 CPU·GPU 각각의 센서 최고값을 보여줘요. SoC 값으로 대체하지 않아요.", 11, MUTED)
+        text(hardware, "CPU 코어별 사용률", 15, FG, true)
+        cpuGraph = UsageGraphView(this, palette, true)
+        hardware.addView(cpuGraph, LinearLayout.LayoutParams(-1, dp(160)))
+        cpuLegend = text(hardware, "CPU 측정 대기 중", 12, MUTED)
+        text(hardware, "GPU 전체 사용률", 15, FG, true).setPadding(0, dp(14), 0, dp(4))
+        gpuGraph = UsageGraphView(this, palette, false)
+        hardware.addView(gpuGraph, LinearLayout.LayoutParams(-1, dp(160)))
+        gpuLegend = text(hardware, "GPU 측정 대기 중", 12, MUTED)
+        text(hardware, "${settings.hardwareSeconds}초마다 갱신 · 최근 120개 · 이 화면을 보는 동안 측정해요. 값이 없는 구간은 빈 구간으로 남겨요.", 12, MUTED)
         hardwareDetails = text(hardware, "CPU·GPU 정보를 확인하는 중…", 13, FG).apply {
             setLineSpacing(dp(5).toFloat(), 1f)
+            visibility = android.view.View.GONE
+        }
+        smallButton(hardware, "코어별 수치 · 온도 펼치기") {
+            hardwareDetails.visibility = if (hardwareDetails.visibility == android.view.View.GONE) android.view.View.VISIBLE else android.view.View.GONE
         }
         text(hardware, "Shizuku를 연결하면 읽을 수 있는 항목이 늘어날 수 있어요. GPU 코어별 정보와 코어별 온도는 기기가 제공할 때만 확인할 수 있어요. SoC·클러스터 센서는 코어별 온도와 구분해요.", 12, MUTED)
         smallButton(hardware, "Shizuku 연결 · 권한 확인") { shizuku?.query() }
@@ -271,7 +328,7 @@ class MainActivity : Activity() {
         text(evidence, "측정 근거 · 결과 공유", 18, FG, true)
         text(evidence, "값의 출처와 해석을 확인하고 현재 결과를 공유하세요.", 13, MUTED)
         button(evidence, "측정 근거 보기 · 공유") { showReport() }
-        text(outer, "기록은 이 기기에만 저장돼요. 원본 덤프는 보관하지 않아요.\nv0.5.0", 12, MUTED)
+        text(outer, "기록은 이 기기에만 저장돼요. 원본 덤프는 보관하지 않아요.\nv0.5.1", 12, MUTED)
         setContentView(dashboard.root)
     }
 
@@ -332,7 +389,7 @@ class MainActivity : Activity() {
         dashboard.refreshBackdrop()
 
         report = buildString {
-            append("Galaxy Battery v0.5.0 / Kotlin\n조회 시간: $time\n")
+            append("Galaxy Battery v0.5.1 / Kotlin\n조회 시간: $time\n")
             append("Model: ${Build.MODEL}\nAndroid: ${Build.VERSION.RELEASE}\nSDK: ${Build.VERSION.SDK_INT}\n")
             append("Build: ${Build.DISPLAY}\nSecurity patch: ${Build.VERSION.SECURITY_PATCH}\n")
             append("\n공식 사이클 원본: ${rawCycle ?: "미제공"}\n플랫폼 SOH 속성 10: ${healthProperty.raw}\n")
@@ -378,7 +435,6 @@ class MainActivity : Activity() {
         val watts = sample?.watts()
         val temperature = sample?.temperature?.takeIf { it in -400..1500 }
         batteryTemperature.text = "배터리 온도 · " + (temperature?.let { String.format(Locale.US, "%.1f°C", it / 10.0) } ?: "확인 불가")
-        if (dashboard.selected == 1 && registered) hardwareReader?.poll()
         powerView.text = ChargePower.text(watts)
         powerSubtitle.text = when {
             sample == null -> "첫 측정 값을 기다리고 있어요."
@@ -766,6 +822,7 @@ class MainActivity : Activity() {
         }
         val power = interval("충전 속도 갱신 · 기록 간격", settings.powerSeconds)
         val battery = interval("기본 배터리 상태 갱신 간격", settings.batterySeconds)
+        val hardware = interval("CPU · GPU 사용률 갱신 간격", settings.hardwareSeconds)
         text(content, "상세 ASOC·BSOH 조회는 ‘배터리 상태 확인’ 버튼으로 실행해요. 짧은 기록 간격은 배터리 사용량과 저장 공간을 늘릴 수 있어요.", 12, MUTED)
         val blur = CheckBox(this).apply { text = "하단 메뉴 · 설정 버튼 배경 블러"; isChecked = settings.blur }
         content.addView(blur)
@@ -776,6 +833,7 @@ class MainActivity : Activity() {
                 settings.theme = themeValues[theme.selectedItemPosition]; settings.blur = blur.isChecked
                 settings.powerSeconds = RefreshPolicy.intervals[power.selectedItemPosition]
                 settings.batterySeconds = RefreshPolicy.intervals[battery.selectedItemPosition]
+                settings.hardwareSeconds = RefreshPolicy.intervals[hardware.selectedItemPosition]
                 // Recreate preserves the selected page and detailed report via saved instance state.
                 recreate()
             }.setNegativeButton("취소", null).show()

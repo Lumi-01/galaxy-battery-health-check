@@ -1,6 +1,6 @@
 # 화면 · 충전·방전 모니터링 변경
 
-이 변경은 소스 코드에 적용됩니다. `dist/galaxy-battery-0.5.0.apk`는 기존 배포 파일이며 새 코드를 포함하지 않습니다. APK 배포 시 기존 배포용 서명키로 다시 빌드하고 버전 정보를 갱신해야 합니다.
+이 변경은 v0.5.1 소스와 APK에 포함됩니다. 기존 배포용 서명키를 유지하며 versionCode를 9로 올렸습니다.
 
 ## 화면
 
@@ -26,6 +26,7 @@ Android 12 이상에서 `FrostedBackdrop`이 페이지 host를 하드웨어 `Ren
 |---|---|
 | CPU 코어별 사용률 | `/proc/stat`의 연속 측정 차이. guest 카운터 중복 합산 제외 |
 | CPU 코어별 온도 | 명시적인 cpuN/coreN 센서 이름이 있을 때만 해당 코어에 매핑 |
+| CPU·GPU 대표 온도 | 명시적인 전체 온도 센서 우선, 없으면 해당 CPU·GPU 센서의 최고값과 이름 |
 | CPU·GPU·SoC 온도 | thermal zone의 원래 센서 이름과 밀리섭씨 값 |
 | GPU 전체 사용률 | Qualcomm KGSL percentage 또는 busy/total 값이 유효한 경우 |
 | GPU 코어별 사용률·온도 | 이 구현의 지원 인터페이스에서 미제공으로 표시 |
@@ -35,7 +36,7 @@ Android 12 이상에서 `FrostedBackdrop`이 페이지 host를 하드웨어 `Ren
 
 로컬 읽기가 기본이며, 사용자가 이미 Shizuku 권한을 허용한 경우 고정 경로만 읽는 별도의 읽기 전용 UserService를 사용합니다. 권한은 자동 요청하지 않으며 카드의 연결·권한 확인 버튼으로 기존 Shizuku 연결 절차를 실행합니다. 셸 명령 문자열이나 임의 경로는 Binder 인자로 받지 않습니다.
 
-하드웨어 정보는 모니터링 화면을 보는 동안 전력 갱신 간격으로 읽습니다. 화면을 벗어나거나 앱이 백그라운드로 가면 하드웨어 조회를 정리합니다. CPU·GPU 정보는 충전 기록 파일에 추가 저장하지 않습니다.
+하드웨어 정보는 모니터링 화면을 보는 동안 독립된 갱신 간격으로 읽습니다. 설정에서 1·2·5·10·30·60초를 선택하며 기본값은 2초입니다. CPU는 코어별 선, GPU는 전체 사용률 그래프로 최근 120개 측정을 보여줍니다. 미지원 값과 긴 측정 공백은 선으로 잇지 않습니다. 화면을 벗어나거나 앱이 백그라운드로 가면 하드웨어 조회를 정리합니다. CPU·GPU 정보는 충전 기록 파일에 추가 저장하지 않습니다.
 
 ## 방전 기록
 
@@ -48,10 +49,10 @@ Android 12 이상에서 `FrostedBackdrop`이 페이지 host를 하드웨어 `Ren
 - 전체 Kotlin 소스와 AIDL Binder 컴파일.
 - 모든 Android 리소스 컴파일 및 APK 리소스 링크.
 - D8 dex 생성과 테스트용 APK 패키징·서명·정렬 검증.
-- 기존 125개 검증 + 하드웨어 계산·방전 저장/재읽기 18개, 총 143개 통과.
+- 기존 125개 검증 + 하드웨어 계산·그래프 샘플·온도 선택·방전 저장/재읽기 28개, 총 153개 통과.
 - 새 테스트는 Windows `build.ps1`에도 연결되어 있습니다.
 
-이 환경에서 화면 렌더링을 실행하거나 실제 갤럭시 센서를 검증하지는 못했습니다. 배포 전에 실기기에서 다음을 확인해야 합니다.
+Android 15 에뮬레이터에서 라이트·다크 화면, GPU 블러, 사용률 그래프의 미지원 표시, CPU·GPU 온도 확인 불가 표시, 센서 상세 펼치기와 페이지 전환을 확인했습니다. CPU·GPU 갱신 간격을 10초로 바꿔 저장한 뒤 화면 복구와 충전 전력의 5초 간격 유지도 확인했습니다. 화면 꺼짐 기록과 종료 후 깨우기 잠금 해제, 충전·방전 기록과 측정 근거 팝업도 확인했습니다. 실제 갤럭시의 CPU·GPU 센서와 Shizuku 응답, One UI 라이브 칩은 실기기 확인이 필요합니다. 실기기 검증 항목은 다음과 같습니다.
 
 1. 라이트·다크에서 세 화면, 설정·기록·측정 근거·삭제 팝업, 화면 좌우 및 버튼 정렬.
 2. 블러 켜기/끄기, 빠른 스크롤과 페이지 전환, 아이콘 선명도, 앱 백그라운드·복귀.
@@ -59,3 +60,7 @@ Android 12 이상에서 `FrostedBackdrop`이 페이지 host를 하드웨어 `Ren
 4. 충전기 미연결 상태에서 측정 시작, 충전 연결/해제, 화면 꺼짐, 종료 후 방전 기록 재열람.
 
 참고: [Material 색상 역할](https://github.com/material-components/material-components-android/blob/master/docs/theming/Color.md), [RenderNode](https://developer.android.com/reference/android/graphics/RenderNode), [Linux /proc](https://www.kernel.org/doc/html/latest/filesystems/proc.html), [thermal sysfs 단위](https://www.kernel.org/doc/html/v5.7/driver-api/thermal/sysfs-api.html).
+
+## v0.5.1 검토 보완
+
+CPU 카운터 열에 잘못된 값이 있으면 행 전체를 제외하도록 수정했습니다. GPU busy/total도 정확히 두 열일 때만 사용합니다. 하드웨어 조회에는 5초 시간 제한을 추가했으며, 응답이 늦은 작업을 중복 예약하지 않고 Shizuku 서비스를 정리합니다. 종료된 화면으로 결과를 전달하지 않도록 차단했습니다.

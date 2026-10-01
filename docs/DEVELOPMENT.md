@@ -26,6 +26,10 @@
 | [PowerSampler.kt](../app/src/main/java/kr/local/galaxybattery/PowerSampler.kt) | Android 전류·전압·잔량·온도·기기 열 제한 단계 읽기 |
 | [PowerLogStore.kt](../app/src/main/java/kr/local/galaxybattery/PowerLogStore.kt) | 측정별 전력 기록 영구 저장, 중단된 마지막 쓰기 복구, 열람·삭제 |
 | [PowerGraphView.kt](../app/src/main/java/kr/local/galaxybattery/PowerGraphView.kt) | Canvas 전력 그래프와 터치로 시점 선택 |
+| [UsageGraphView.kt](../app/src/main/java/kr/local/galaxybattery/UsageGraphView.kt) | CPU 코어별·GPU 전체 사용률 그래프, 범례, 누락 구간 처리 |
+| [HardwareTelemetry.kt](../app/src/main/java/kr/local/galaxybattery/HardwareTelemetry.kt) | CPU 카운터 차이, 그래프용 샘플, 온도 센서 선택·코어 매핑 |
+| [HardwareReader.kt](../app/src/main/java/kr/local/galaxybattery/HardwareReader.kt) | 화면 조회, Shizuku 또는 직접 읽기, 시간 제한과 서비스 정리 |
+| [HardwareProbe.kt](../app/src/main/java/kr/local/galaxybattery/HardwareProbe.kt) | 고정된 proc/sysfs 경로의 CPU·GPU·온도 읽기 |
 | [HistoryStore.kt](../app/src/main/java/kr/local/galaxybattery/HistoryStore.kt) | 조회 결과의 기기 내 영구 저장, 날짜순 읽기, 개별·전체 삭제 |
 | [MainActivity.kt](../app/src/main/java/kr/local/galaxybattery/MainActivity.kt) | 카드 내용, 기록 목록, 버튼 동작, 파일 선택, 조회 결과 표시 |
 | [ShizukuReader.kt](../app/src/main/java/kr/local/galaxybattery/ShizukuReader.kt) | Shizuku 연결, 권한 요청, 서비스 연결, 시간 제한 및 정리 |
@@ -85,7 +89,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 이후 소스만 수정했다면 `build.ps1`만 다시 실행하면 됩니다.
 
-- APK: `dist/galaxy-battery-0.5.0.apk`
+- APK: `dist/galaxy-battery-0.5.1.apk`
 - 체크섬: `dist/SHA256SUMS.txt`
 - 로컬 서명키: `.tools/diagnostic.keystore`
 
@@ -112,11 +116,12 @@ PowerShell 빌드는 다음 검증을 실행합니다.
 - [HistoryStoreTest.java](../tests/HistoryStoreTest.java): 재실행 후 유지, 정렬, 저장 실패, 개별·전체 삭제 등 11개
 - [PowerLogTest.java](../tests/PowerLogTest.java): W 계산, 부호·미지원 값, 최고·최저, 기록 재열람·부분 쓰기 복구·삭제 등 33개
 - [MonitorPolicyTest.java](../tests/MonitorPolicyTest.java): 0W 구간·복원·제외 조건, 이전 파일 호환, 열 제한, 방전 칩, 설정·그래프 간격 등 25개
+- [HardwareTelemetryTest.java](../tests/HardwareTelemetryTest.java): CPU 델타·잘못된 열 처리·그래프 샘플·온도 대체 센서 선택·방전 기록 전체 집계 등 28개
 - APK 서명·정렬·매니페스트 확인
 
 테스트는 별도 JVM 실행기이며 Gradle의 `test` 작업에 연결되어 있지 않습니다. Android 화면 동작, Shizuku 권한 창, 실제 삼성 펌웨어의 응답은 실기기에서 별도로 확인해야 합니다.
 
-v0.5.0은 Android 15 에뮬레이터에서도 3개 페이지, 라이트·다크 전환, 갱신 간격 저장, Shizuku 미연결 안내, 시스템 열 상태 2단계 표시, 화면 꺼짐 기록과 종료 후 wake lock 해제를 확인했습니다. 테스트용 기록으로 0W 회복 시간대·횟수 표시, 진단 요약과 근거 펼치기, 개별 삭제를 확인했습니다. 에뮬레이터 값과 예시 기록은 S25 실측 결과가 아니며, Android 16/One UI 상단바 칩은 이 에뮬레이터 검증에 포함되지 않습니다.
+v0.5.1은 Android 15 에뮬레이터에서도 3개 페이지, 라이트·다크 전환, 갱신 간격 저장, Shizuku 미연결 안내, 시스템 열 상태 2단계 표시, 화면 꺼짐 기록과 종료 후 wake lock 해제를 확인했습니다. 테스트용 기록으로 0W 회복 시간대·횟수 표시, 진단 요약과 근거 펼치기, 개별 삭제를 확인했습니다. 에뮬레이터 값과 예시 기록은 S25 실측 결과가 아니며, Android 16/One UI 상단바 칩은 이 에뮬레이터 검증에 포함되지 않습니다.
 
 로그 분석은 최대 90초, 압축 해제 후 512 MiB까지 읽으며, 긴 한 줄은 64 KiB를 넘으면 제외합니다. ZIP 내부 파일은 최대 2,048개로 제한하고 중첩 압축을 재귀 분석하지 않습니다. 원본 로그 전체를 보관하지 않고 지정된 배터리 필드만 추출합니다.
 
@@ -133,6 +138,8 @@ API 36의 `setShortCriticalText()`에 현재 W만 전달하고, `android.request
 새 `.power` 파일의 magic은 `0x47504232`입니다. 헤더는 20바이트, 샘플은 36바이트이며 기존 32바이트 형식 `0x47504231`도 읽기·추가 쓰기를 지원합니다. 예전 형식에는 열 제한 단계가 없어 `-1`(미기록)로 읽습니다. 0W 구간은 파일 전체 샘플을 재생해 계산하며 별도 파일 없이 재실행 후에도 유지합니다. 최근 200개 구간과 전체 횟수를 관리하고, 진행 중인 구간 상태도 복원합니다.
 
 기본 배터리 조회와 전력 조회는 별도의 Handler 타이머로 작동합니다. 서비스는 매 주기 설정을 읽고, 기록 간격 변경 시 다음 샘플을 다시 예약해 같은 세션을 유지합니다. 상세 조회는 자동 타이머에 연결하지 않습니다. `PowerSampler`에서 API 29 이상 시스템 열 상태를 읽고, UI·그래프 선택·기록에 전달합니다. 기기 전체 열 상태를 충전 제한 원인으로 단정하지 마세요.
+
+CPU·GPU 조회도 별도 Handler 타이머를 사용합니다. `AppSettings.hardwareSeconds`의 기본값은 2초입니다. 모니터링 화면을 벗어나면 타이머와 연결을 정리하며, 복귀 시 CPU 차이 계산 기준을 다시 잡습니다. `HardwareTelemetry.Frame`의 nullable 사용률을 그래프에 전달하므로 미지원·첫 측정·잘못된 카운터는 0%로 변환되지 않습니다. 최근 120개 샘플은 메모리에서만 유지합니다. CPU·GPU 전체 온도 센서를 우선 선택하고, 없으면 이름으로 구분한 해당 센서의 최고값과 이름을 표시합니다. SoC나 클러스터를 코어 온도로 임의 환산하지 않습니다.
 
 테마는 Activity 생성 전에 적용하며 기본값은 시스템 설정입니다. 아이콘의 foreground는 launcher 안전 영역 안에 두고, 마스크 모양은 Android 런처에 맡깁니다. 하단 블러는 page host만 캡처하므로 메뉴 자체를 재귀 캡처하지 않으며, 라벨과 아이콘은 블러 위에 선명하게 그립니다.
 

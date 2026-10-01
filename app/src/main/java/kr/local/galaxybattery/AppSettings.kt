@@ -15,6 +15,9 @@ class AppSettings(context: Context) {
     var batterySeconds: Int
         get() = RefreshPolicy.seconds(preferences.getInt("battery_seconds", 2), 2)
         set(value) { preferences.edit().putInt("battery_seconds", RefreshPolicy.seconds(value, 2)).apply() }
+    var hardwareSeconds: Int
+        get() = RefreshPolicy.seconds(preferences.getInt("hardware_seconds", 2), 2)
+        set(value) { preferences.edit().putInt("hardware_seconds", RefreshPolicy.seconds(value, 2)).apply() }
     var blur: Boolean
         get() = preferences.getBoolean("nav_blur", true)
         set(value) { preferences.edit().putBoolean("nav_blur", value).apply() }

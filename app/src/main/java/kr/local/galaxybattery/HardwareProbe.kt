@@ -34,7 +34,8 @@ object HardwareProbe {
             }
         }
         val percent = read("/sys/class/kgsl/kgsl-3d0/gpu_busy_percentage")?.toDoubleOrNull()
-        val busy = read("/sys/class/kgsl/kgsl-3d0/gpubusy")?.split(Regex("\\s+"))?.mapNotNull { it.toLongOrNull() }
+        val busyFields = read("/sys/class/kgsl/kgsl-3d0/gpubusy")?.split(Regex("\\s+"))
+        val busy = busyFields?.takeIf { it.size == 2 }?.mapNotNull { it.toLongOrNull() }
         val gpu = percent?.takeIf { it in 0.0..100.0 } ?: busy?.takeIf {
             it.size == 2 && it[1] > 0 && it[0] in 0..it[1]
         }?.let { it[0] * 100.0 / it[1] }
