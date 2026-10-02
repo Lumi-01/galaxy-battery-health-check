@@ -10,8 +10,8 @@ android {
         applicationId = "kr.local.galaxybattery"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "0.5.5"
+        versionCode = 14
+        versionName = "0.5.6"
     }
     // The tiny generated Binder interface is checked in: native aidl cannot handle
     // all Unicode Windows paths. Keep its source .aidl as the contract.

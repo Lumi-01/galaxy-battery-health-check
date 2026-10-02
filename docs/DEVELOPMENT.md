@@ -98,7 +98,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
 
 이후 소스만 수정했다면 `build.ps1`만 다시 실행하면 됩니다.
 
-- APK: `dist/galaxy-battery-0.5.5.apk`
+- APK: `dist/galaxy-battery-0.5.6.apk`
 - 체크섬: `dist/SHA256SUMS.txt`
 - 로컬 서명키: `.tools/diagnostic.keystore`
 

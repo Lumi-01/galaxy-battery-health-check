@@ -98,16 +98,16 @@ if (!(Test-Path $keystore)) {
     & $keytool -genkeypair -keystore $keystore -storepass android -keypass android -alias diagnostic -keyalg RSA -keysize 2048 -validity 10000 -dname 'CN=Galaxy Battery Local Diagnostic'
     Check-Exit 'Local signing key creation'
 }
-$apk = Join-Path $dist 'galaxy-battery-0.5.5.apk'
+$apk = Join-Path $dist 'galaxy-battery-0.5.6.apk'
 & $java -jar "$BuildToolsPath/lib/apksigner.jar" sign --ks $keystore --ks-key-alias diagnostic --ks-pass pass:android --key-pass pass:android --out $apk "$build/aligned.apk"
 Check-Exit 'APK signing'
 & $java -jar "$BuildToolsPath/lib/apksigner.jar" verify --verbose $apk
 Check-Exit 'APK signature verification'
-& "$BuildToolsPath/zipalign.exe" -c -p 4 'dist/galaxy-battery-0.5.5.apk'
+& "$BuildToolsPath/zipalign.exe" -c -p 4 'dist/galaxy-battery-0.5.6.apk'
 Check-Exit 'APK alignment verification'
-& "$BuildToolsPath/aapt.exe" dump badging 'dist/galaxy-battery-0.5.5.apk' | Select-String 'package:|sdkVersion|targetSdkVersion|application-label:|launchable-activity:|uses-permission'
+& "$BuildToolsPath/aapt.exe" dump badging 'dist/galaxy-battery-0.5.6.apk' | Select-String 'package:|sdkVersion|targetSdkVersion|application-label:|launchable-activity:|uses-permission'
 Check-Exit 'APK manifest inspection'
 $hash = (Get-FileHash $apk -Algorithm SHA256).Hash.ToLower()
-"$hash  galaxy-battery-0.5.5.apk" | Set-Content "$dist/SHA256SUMS.txt" -Encoding Ascii
+"$hash  galaxy-battery-0.5.6.apk" | Set-Content "$dist/SHA256SUMS.txt" -Encoding Ascii
 Write-Output "APK ready: $apk"
 } finally { Pop-Location }

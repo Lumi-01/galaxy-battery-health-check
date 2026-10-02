@@ -255,7 +255,7 @@ class MainActivity : Activity() {
 
         val advanced = card(outer)
         text(advanced, "배터리 정보 불러오기", 18, FG, true)
-        text(advanced, "Shizuku로 조회하거나 SysDump 로그를 불러오세요", 13, MUTED)
+        text(advanced, "Shizuku를 연결해 조회하거나, 삼성 진단 로그(SysDump)를 불러오세요", 13, MUTED)
         advancedStatus = text(advanced, "연결 상태를 확인하고 있어요…", 13, MUTED)
         button(advanced, "배터리 상태 확인") { if (!importing) shizuku?.query() }
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -268,7 +268,7 @@ class MainActivity : Activity() {
             text(it, "충전 사이클", 13, MUTED)
             cycleView = text(it, "—", 26, FG, true)
             cycleNote = text(it, "", 12, MUTED)
-            diagnosisLabel = text(it, "ASOC", 13, MUTED).apply { setPadding(0, dp(14), 0, dp(3)) }
+            diagnosisLabel = text(it, "충전량 보정 값 (ASOC)", 13, MUTED).apply { setPadding(0, dp(14), 0, dp(3)) }
             sohView = text(it, "—", 26, FG, true)
             sohNote = text(it, "", 12, MUTED)
         }
@@ -276,7 +276,7 @@ class MainActivity : Activity() {
             text(it, "배터리 상태", 16, FG, true)
             text(it, "화면을 보는 동안 ${settings.batterySeconds}초마다 업데이트돼요.", 12, ACCENT)
             details = text(it, "", 15, MUTED).apply { setLineSpacing(dp(7).toFloat(), 1f) }
-            text(it, "‘정상’은 배터리 수명 100%를 뜻하지 않아요", 12, MUTED)
+            text(it, "현재 남은 용량은 완충했을 때의 용량과 달라요.\n‘정상’은 배터리 수명 100%를 뜻하지 않아요.", 12, MUTED)
         }
         updated = text(outer, "", 12, MUTED).apply { setPadding(0, dp(18), 0, dp(6)) }
         outer = dashboard.pages[1]
@@ -284,7 +284,7 @@ class MainActivity : Activity() {
         text(power, "현재 전력", 13, MUTED)
         powerView = text(power, "— W", 48, ACCENT, true)
         powerSubtitle = text(power, "확인 중", 14, MUTED)
-        text(power, "배터리 기준 순전력 · 충전기 출력과 달라요", 12, MUTED)
+        text(power, "배터리에 들어오거나 빠져나가는 전력이에요.\n충전기 출력과는 달라요.", 12, MUTED)
         monitorButton = button(power, "측정 시작") { togglePowerRecording() }
         monitorStatus = text(power, "측정 중에는 화면이 꺼져도 기록해요", 12, MUTED)
         val powerActions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
@@ -304,7 +304,7 @@ class MainActivity : Activity() {
         powerStats = PowerStatisticsView(this, palette)
         statistics.addView(powerStats, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
         interruptionView = text(statistics, "충전 회복 0회", 14, FG, true).apply { setPadding(0, dp(12), 0, dp(3)) }
-        text(statistics, "충전 중 방전으로 바뀌었다가 회복한 횟수", 12, MUTED)
+        text(statistics, "충전기를 연결한 채 방전으로 바뀌었다가 다시 충전된 횟수", 12, MUTED)
 
         val thermal = card(outer)
         thermalView = ThermalStatusView(this, palette)
@@ -326,7 +326,7 @@ class MainActivity : Activity() {
         text(evidence, "측정 근거 · 결과 공유", 18, FG, true)
         text(evidence, "원본 값 확인과 결과 공유", 13, MUTED)
         button(evidence, "측정 근거 보기 · 공유") { showReport() }
-        text(outer, "기록은 이 기기에만 저장돼요.\n원본 덤프는 보관하지 않아요.\nv0.5.5", 12, MUTED)
+        text(outer, "기록은 이 기기에만 저장돼요.\n원본 덤프는 보관하지 않아요.\nv0.5.6", 12, MUTED)
         setContentView(dashboard.root)
     }
 
@@ -363,33 +363,33 @@ class MainActivity : Activity() {
         statusView.text = BatteryValues.charging(extra(battery, BatteryManager.EXTRA_STATUS))
         progress.setLevel(level)
         cycleView.text = cycle?.let { "$it 회" } ?: "조회 필요"
-        cycleNote.text = if (cycle != null) "기기 누적 사이클 · 연결 횟수와 달라요"
+        cycleNote.text = if (cycle != null) "누적 충전·사용 횟수예요. 충전기 연결 횟수와 달라요."
             else "배터리 상태 확인을 눌러 조회하세요"
         sohView.text = soh?.let { "$it%" } ?: "조회 필요"
-        diagnosisLabel.text = if (soh != null) "배터리 성능" else "ASOC"
+        diagnosisLabel.text = if (soh != null) "배터리 성능" else "충전량 보정 값 (ASOC)"
         sohNote.text = if (soh != null) "기기가 추정한 완충 용량 비율"
             else "Shizuku 연결 후 조회하세요"
         detailed?.let { value ->
-            diagnosisLabel.text = "ASOC"
+            diagnosisLabel.text = "충전량 보정 값 (ASOC)"
             cycleView.text = value.cycleText().replace("확인 불가", "정보 없음")
             cycleNote.text = if (value.usage.single()?.let { it > 0 } == true)
-                "누적 사용량 ÷ 100 · 추정치\n$detailedSource · $detailedTime"
+                "누적 배터리 사용량으로 계산한 대략적인 횟수예요.\n$detailedSource · $detailedTime"
                 else "사이클 확인 불가 · 측정 근거 참고"
             sohView.text = value.asoc.health()?.let { "$it%" } ?: "정보 없음"
             sohNote.text = if (value.asoc.health() != null)
-                "충전량 보정 참고 값 · 수명과 달라요\nBSOH는 측정 근거에서 확인하세요"
+                "배터리 충전량을 계산·보정할 때 참고하는 값이에요.\n남은 수명 %는 아니에요. BSOH는 측정 근거에서 확인하세요."
                 else "진단 값 없음 · 새 로그로 확인하세요"
         }
         val tempText = temperature?.let { BatteryValues.decimal(it / 10.0, "°C") } ?: "정보 없음"
         val voltText = voltage?.takeIf { it > 0 }?.let { String.format(Locale.KOREA, "%.3f V", it / 1000.0) } ?: "정보 없음"
         val currentText = current.value?.let { BatteryValues.decimal(it / 1000.0, "mA") } ?: "정보 없음"
         val chargeText = charge.value?.takeIf { it > 0 }?.let { BatteryValues.decimal(it / 1000.0, "mAh") } ?: "정보 없음"
-        details.text = "온도  $tempText\n전압     $voltText\n순간 전류     $currentText\n남은 전하량     $chargeText\n상태     ${BatteryValues.condition(extra(battery, BatteryManager.EXTRA_HEALTH))}"
+        details.text = "온도  $tempText\n전압     $voltText\n현재 전류     $currentText\n현재 남은 용량     $chargeText\n상태     ${BatteryValues.condition(extra(battery, BatteryManager.EXTRA_HEALTH))}"
         updated.text = "기본 정보 업데이트  ${SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date())}"
         dashboard.refreshBackdrop()
 
         report = buildString {
-            append("Galaxy Battery v0.5.5 / Kotlin\n조회 시간: $time\n")
+            append("Galaxy Battery v0.5.6 / Kotlin\n조회 시간: $time\n")
             append("Model: ${Build.MODEL}\nAndroid: ${Build.VERSION.RELEASE}\nSDK: ${Build.VERSION.SDK_INT}\n")
             append("Build: ${Build.DISPLAY}\nSecurity patch: ${Build.VERSION.SECURITY_PATCH}\n")
             append("\n공식 사이클 원본: ${rawCycle ?: "미제공"}\n플랫폼 SOH 속성 10: ${healthProperty.raw}\n")
@@ -479,8 +479,8 @@ class MainActivity : Activity() {
 
     private fun sampleCaption(sample: ChargePower.Sample): String {
         val time = SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(sample.time))
-        val level = sample.level.takeIf { it in 0..100 }?.let { "$it%" } ?: "잔량 미지원"
-        val temperature = sample.temperature.takeIf { it in -400..1500 }?.let { String.format(Locale.US, "%.1f°C", it / 10.0) } ?: "온도 미지원"
+        val level = sample.level.takeIf { it in 0..100 }?.let { "$it%" } ?: "잔량 정보 없음"
+        val temperature = sample.temperature.takeIf { it in -400..1500 }?.let { String.format(Locale.US, "%.1f°C", it / 10.0) } ?: "온도 정보 없음"
         return "측정 시각 $time\n${if ((sample.watts() ?: 0.0) < 0) "방전" else "유입"} ${ChargePower.text(sample.watts())}\n배터리 잔량 $level\n배터리 온도 $temperature\n${ThermalStatus.label(sample.thermalStatus).replace(" ·", "\n")}"
     }
 
@@ -555,7 +555,7 @@ class MainActivity : Activity() {
                     session.interruptionState.events.forEach { event ->
                         text(content, "방전 시작 ${date(event.started)} ${clock(event.started)}\n충전 회복 ${date(event.recovered)} ${clock(event.recovered)}\n최저 전력 ${ChargePower.text(event.lowestWatts)}", 13, FG)
                     }
-                    text(content, "연결을 유지한 충전 → 방전 → 충전만 기록해요.\n시각은 측정 기준이며, 최근 200구간을 표시해요.", 12, MUTED)
+                    text(content, "충전기를 연결한 채 방전됐다가 다시 충전된 경우만 세요.\n시각은 측정한 시간이에요. 최근 200건까지 표시해요.", 12, MUTED)
                     val screenEnd = if (session.ended > 0) session.ended else if (ChargeMonitorService.snapshot.active && ChargeMonitorService.snapshot.id == id) System.currentTimeMillis() else maxOf(session.lastSampleTime, session.screenEvents.maxOfOrNull { it.time } ?: 0L)
                     val graph = PowerGraphView(this, palette).apply { setSamples(session.samples) }
                     graph.setScreenEvents(session.screenEvents, screenEnd)
@@ -566,7 +566,7 @@ class MainActivity : Activity() {
                     text(content, if (session.screenEvents.isEmpty()) "이전 기록에는 화면 상태가 저장되지 않았어요."
                         else if (off.isEmpty()) "관측된 화면 꺼짐 구간이 없어요."
                         else "화면 꺼짐 ${off.size}구간\n총 ${off.sumOf { it.end - it.start } / 1000}초\n" + off.takeLast(30).joinToString("\n") { "꺼짐 ${date(it.start)} ${clock(it.start)}\n켜짐 ${date(it.end)} ${clock(it.end)}" }, 12, MUTED)
-                    text(content, "회색은 화면 꺼짐 구간이에요.\n평균·최대는 유효한 측정값 기준이며, 방전은 전력 크기로 표시해요.", 12, MUTED)
+                    text(content, "회색은 화면이 꺼진 구간이에요.\n평균·최대는 읽을 수 있었던 값으로 계산해요.\n방전 통계는 빠져나간 전력을 양수로 표시해요.", 12, MUTED)
                     AlertDialog.Builder(this).setTitle(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.KOREA).format(Date(session.started)))
                         .setView(ScrollView(this).apply { addView(content) })
                         .setPositiveButton("목록으로") { _, _ -> showPowerHistory() }
@@ -763,7 +763,7 @@ class MainActivity : Activity() {
         section("현재 배터리 상태", "잔량: ${levelView.text}\n상태: ${statusView.text}\n${details.text}")
         section("기기 정보", "${Build.MODEL}\nAndroid ${Build.VERSION.RELEASE}\nSDK ${Build.VERSION.SDK_INT}\n빌드: ${Build.DISPLAY}\n보안 패치: ${Build.VERSION.SECURITY_PATCH}")
         section("원본 진단 필드 · 계산 근거", detailed?.evidence() ?: "상세 조회 후 원본 필드가 표시돼요.", true)
-        section("수치 해석", "ASOC와 BSOH는 서로 다른 지표예요.\nASOC를 정확한 용량 유지율로 해석하지 마세요.\n추정 사이클은 누적 사용량 ÷ 100이며 비공식 환산이에요.\n잔여 전하량은 완충 용량이 아니며, ‘정상’은 성능 100%를 뜻하지 않아요.")
+        section("수치 해석", "ASOC는 충전량 계산·보정에 참고하는 값이에요. 정확한 남은 수명 %는 아니에요.\nBSOH는 처음 설계한 용량과 비교한 배터리 건강 상태예요. ASOC와는 따로 보세요.\n추정 사이클은 누적 사용량 ÷ 100으로 계산한 대략적인 횟수예요. 삼성의 공식 환산 규칙은 아니에요.\n현재 남은 용량은 완충 용량과 달라요. ‘정상’은 성능 100%를 뜻하지 않아요.")
         var expanded = false
         val rawPanel = card(content).apply { visibility = android.view.View.GONE }
         text(rawPanel, "전체 원문", 16, FG, true)
@@ -826,7 +826,7 @@ class MainActivity : Activity() {
         val power = interval("전력 측정", settings.powerSeconds)
         val battery = interval("배터리 상태", settings.batterySeconds)
         val hardware = interval("CPU·GPU", settings.hardwareSeconds)
-        text(refresh, "쓰로틀링 10초 간격 · OS 변화는 즉시 반영", 12, MUTED)
+        text(refresh, "발열 정보는 10초마다 확인해요.\n시스템이 알려주는 쓰로틀링 단계 변화는 바로 반영해요.", 12, MUTED)
         text(refresh, "짧은 간격은 배터리·저장 공간을 더 사용해요", 12, MUTED)
         AlertDialog.Builder(this).setTitle("설정").setView(ScrollView(this).apply { addView(content) })
             .setPositiveButton("적용") { _, _ ->

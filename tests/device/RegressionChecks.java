@@ -125,7 +125,7 @@ public class RegressionChecks extends Instrumentation {
                 HardwareTelemetry telemetry=new HardwareTelemetry();telemetry.describe(raw,"test");
                 final ThermalStatusView[] thermal=new ThermalStatusView[1];
                 runOnMainSync(()->{thermal[0]=new ThermalStatusView(a,AppPalette.Companion.forDark(false));thermal[0].setStatus(0,1.1f,telemetry.getLatest().getCooling(),1,"Shizuku",1,1);});
-                check(thermal[0].getContentDescription().toString().contains("1개 작동") && thermal[0].getContentDescription().toString().contains("쓰로틀링 0단계"),"OS zero must not hide active kernel cooling signals");
+                check(thermal[0].getContentDescription().toString().contains("성능 제한 요청 1개 확인") && thermal[0].getContentDescription().toString().contains("쓰로틀링 0단계"),"OS zero must not hide active kernel cooling signals");
             }else if(mode.equals("preview")){
                 final Activity a=activity;
                 DashboardScaffold dashboard=(DashboardScaffold)field(a,"dashboard");

@@ -53,7 +53,7 @@ public class MonitorPolicyTest {
         check(ThermalStatus.label(-1).contains("확인 불가") && ThermalStatus.label(0).equals("쓰로틀링 0단계") && ThermalStatus.label(6).equals("쓰로틀링 6단계"));
         check(ThermalStatus.validHeadroom(Float.NaN)==null && ThermalStatus.validHeadroom(Float.POSITIVE_INFINITY)==null && ThermalStatus.validHeadroom(-1f)==null);
         check(ThermalStatus.validHeadroom(1.25f).equals(1.25f));
-        check(ThermalStatus.headroomWarning(null).contains("확인 불가") && ThermalStatus.headroomWarning(.9f).contains("가능성") && ThermalStatus.headroomWarning(1.1f).contains("기준 이상"));
+        check(ThermalStatus.headroomWarning(null).contains("읽을 수 없어요") && ThermalStatus.headroomWarning(.9f).contains("가능성") && ThermalStatus.headroomWarning(1.1f).contains("기준 이상"));
         Path dir=Files.createTempDirectory("monitor-policy");
         try {
             PowerLogStore store=new PowerLogStore(dir.toFile());String id=store.create(1000);

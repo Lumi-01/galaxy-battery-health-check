@@ -49,7 +49,7 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         gpu.addView(OneUiToggle(context, palette, "GPU 코어별 보기", "기기에서 제공하는 정보 확인", settings.gpuCores) {
             settings.gpuCores = it; gpuDetails.visibility = if (it) VISIBLE else GONE
         })
-        gpuDetails = label(gpu, "현재 조회 방식은 GPU 전체 정보만 지원해요", 12, palette.muted)
+        gpuDetails = label(gpu, "GPU는 전체 사용률만 읽을 수 있어요.\n개별 코어의 사용률은 표시할 수 없어요.", 12, palette.muted)
         gpuDetails.visibility = if (settings.gpuCores) VISIBLE else GONE
 
         val temperatures = card()
@@ -68,7 +68,7 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         footer.setPadding(dp(4), dp(16), dp(4), dp(8))
         val connection = AppUi.action(context, palette, "Shizuku 연결 · 권한 확인", clicked = connect)
         addView(connection, LayoutParams(-1, dp(AppUi.ACTION_HEIGHT)))
-        label(this, "—는 정보 없음 · Shizuku로 추가 조회 가능", 12, palette.muted)
+        label(this, "—는 읽지 못한 값이에요.\nShizuku를 연결해도 기기에서 제공하지 않는 값은 표시할 수 없어요.", 12, palette.muted)
             .setPadding(dp(4), dp(12), dp(4), dp(4))
         renderCores(); renderSensors()
     }
@@ -121,7 +121,7 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
             block.graph.setFrames(frames)
             val offline = latest.cpuOnline[id] == false
             block.clock.text = frequency(if (offline) null else latest.cpuClockMHz[id])
-            block.usage.text = if (offline) "오프라인" else percent(latest.cpu[id])
+            block.usage.text = if (offline) "사용 안 함" else percent(latest.cpu[id])
             block.temperature.text = temperature(latest.cpuTemperatures[id])
             block.note.visibility = GONE // Offline state is shown in the usage row without resizing the card.
         }
@@ -162,6 +162,8 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
     private fun graph(parent: LinearLayout, title: String, subtitle: String, cpu: Boolean, core: Int? = null): GraphBlock {
         label(parent, title, if (core == null) 20 else 14, palette.foreground, true)
         if (subtitle.isNotBlank()) label(parent, subtitle, 12, palette.muted).setPadding(0, dp(2), 0, dp(6))
+        if (core == null) label(parent, "Shizuku를 연결하지 않으면\n그래프가 안 보일 수 있어요", 12, palette.muted)
+            .setPadding(0, dp(2), 0, dp(6))
         val graph = UsageGraphView(context, palette, cpu, core)
         parent.addView(graph, LayoutParams(-1, dp(if (core == null) 120 else 88)).apply { topMargin = dp(6); bottomMargin = dp(if (core == null) 12 else 6) })
         val metrics = LinearLayout(context).apply { orientation = VERTICAL; isBaselineAligned = false }
@@ -184,7 +186,7 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
                 row.addView(this, LayoutParams(0, -2, 1f))
             }
         }
-        val clock = metric(if (cpu && core == null) "클럭 범위" else "클럭")
+        val clock = metric(if (cpu && core == null) "동작 속도 범위" else "동작 속도")
         val usage = metric("사용률"); val temp = metric("온도")
         val note = label(parent, "", 11, palette.muted).apply { visibility = GONE; setPadding(0, dp(6), 0, 0) }
         return GraphBlock(graph, clock, usage, temp, note)

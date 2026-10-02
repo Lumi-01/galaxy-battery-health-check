@@ -44,9 +44,9 @@ object DumpParser {
             String.format(Locale.KOREA, "약 %.2f 회", it / 100.0)
         } ?: "확인 불가"
 
-        fun summary(): String = "ASOC  ${asoc.health()?.let { "$it%" } ?: "확인 불가"}" +
+        fun summary(): String = "충전량 보정 참고 값 (ASOC)  ${asoc.health()?.let { "$it%" } ?: "확인 불가"}" +
             "\n추정 사이클  ${cycleText()}" +
-            "\nBSOH (별도 지표)  ${bsoh.health()?.let { "$it%" } ?: "확인 불가"}"
+            "\n배터리 건강 상태 (BSOH)  ${bsoh.health()?.let { "$it%" } ?: "확인 불가"}"
 
         fun evidence(): String = buildString {
             listOf(asoc, usage, bsoh).forEach { field ->

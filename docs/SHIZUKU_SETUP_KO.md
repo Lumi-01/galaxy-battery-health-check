@@ -4,7 +4,7 @@
 
 ## 1. 설치
 
-[Shizuku 공식 다운로드](https://shizuku.rikka.app/download/)에서 Google Play 또는 GitHub Release로 이동해 설치하세요. 갤럭시 배터리 앱은 **[앱 설치 파일 다운로드](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.5.5.apk)**를 눌러 받을 수 있습니다. 휴대폰에서 다운로드한 APK를 열어 설치하세요.
+[Shizuku 공식 다운로드](https://shizuku.rikka.app/download/)에서 Google Play 또는 GitHub Release로 이동해 설치하세요. 갤럭시 배터리 앱은 **[앱 설치 파일 다운로드](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.5.6.apk)**를 눌러 받을 수 있습니다. 휴대폰에서 다운로드한 APK를 열어 설치하세요.
 
 ## 2. 개발자 옵션 열기
 

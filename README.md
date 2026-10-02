@@ -2,7 +2,7 @@
 
 갤럭시의 배터리 진단·사이클과 충전·방전 전력을 확인하는 Kotlin Android 앱입니다. 전력 그래프와 진단 결과를 기기에 저장하고 이전 기록을 다시 볼 수 있습니다.
 
-**[APK 다운로드 · v0.5.5](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.5.5.apk)** · **[Shizuku 설치·설정](docs/SHIZUKU_SETUP_KO.md)** · **[코드 수정·빌드](docs/DEVELOPMENT.md)**
+**[APK 다운로드 · v0.5.6](https://raw.githubusercontent.com/Lumi-01/galaxy-battery-health-check/main/dist/galaxy-battery-0.5.6.apk)** · **[Shizuku 설치·설정](docs/SHIZUKU_SETUP_KO.md)** · **[코드 수정·빌드](docs/DEVELOPMENT.md)**
 
 휴대폰에서 다운로드 링크를 누르고 **내 파일 → 다운로드**에서 APK를 열어 설치하세요. 이전 버전 위에 업데이트할 수 있습니다. [SHA256 체크섬](dist/SHA256SUMS.txt)
 
@@ -53,11 +53,11 @@ Android 16 이상에서는 Live Update로 현재 W만 상단바에 표시하도�
 
 ## 쓰로틀링과 CPU·GPU
 
-쓰로틀링은 **OS가 보고한 0~6단계**로 표시합니다. 발열 부하와 심한 쓰로틀링 기준 **1.0**을 함께 표시하고, 조회 가능한 커널 제한 장치의 신호는 별도로 보여줍니다. 확인 시각·출처는 **상세 정보**에서 확인합니다.
+쓰로틀링은 **OS가 보고한 0~6단계**로 표시합니다. 발열 부하와 심한 쓰로틀링 기준 **1.0**을 함께 표시하고, 조회 가능한 커널 제한 장치의 신호는 별도로 보여줍니다. CPU·GPU 성능 제한 요청은 기기가 성능을 낮추도록 요청한 항목입니다. 개수는 코어 수나 OS 단계가 아닙니다. 읽은 항목에 요청이 없는 경우와 값을 읽지 못한 경우를 구분합니다. 확인 시각·읽은 방법·제한 요청 수준은 **상세 정보**에서 확인합니다.
 
 **0단계는 실제 쓰로틀링이 없다는 보장이 아닙니다.** 부하·커널 신호를 임의의 OS 단계로 환산하거나 온도·클럭 하락만으로 쓰로틀링을 확정하지 않습니다. 기록의 최대 단계는 OS 보고값 기준입니다. [Android Thermal API](https://developer.android.com/games/optimize/adpf/thermal?hl=ko)
 
-CPU·GPU는 기본적으로 전체 사용률 그래프와 클럭·사용률·온도를 표시합니다. **CPU 코어별 보기**를 켜면 한 줄에 두 코어씩 표시합니다. 코어 온도가 없으면 전체 온도만 표시하며 값을 복사하지 않습니다. 현재 GPU 조회 방식은 전체 정보만 지원합니다. **센서별 온도 보기**에서는 이름별 값을 확인합니다. 미지원 값은 **—**이며 누락 구간은 선으로 잇지 않습니다. Shizuku 연결 시 조회 가능한 항목이 늘어날 수 있습니다.
+CPU·GPU는 기본적으로 전체 사용률 그래프와 동작 속도(클럭)·사용률·온도를 표시합니다. **CPU 코어별 보기**를 켜면 한 줄에 두 코어씩 표시합니다. 코어 온도가 없으면 전체 온도만 표시하며 값을 복사하지 않습니다. 현재 GPU 조회 방식은 전체 정보만 지원합니다. **센서별 온도 보기**에서는 이름별 값을 확인합니다. 미지원 값은 **—**이며 누락 구간은 선으로 잇지 않습니다. Shizuku를 연결하지 않으면 CPU·GPU 그래프가 표시되지 않을 수 있습니다. 연결해도 기기에서 정보를 제공하지 않으면 표시할 수 없습니다.
 
 ## 배터리 진단과 사이클
 
@@ -81,6 +81,6 @@ CPU·GPU는 기본적으로 전체 사용률 그래프와 클럭·사용률·온
 
 Android 8 이상, 무선 디버깅 Shizuku 설정은 Android 11 이상에서 사용할 수 있습니다. 개발 기준은 Galaxy S25·One UI 9.0 베타입니다. **S25 베타의 실제 상세 값 조회와 Android 16 상단바 칩은 실기기 확인이 필요합니다.** 기종·펌웨어마다 필드 제공 여부가 다릅니다.
 
-v0.5.5는 순수 로직 203개 검사, 에뮬레이터의 토글·설정 적용·레이아웃·쓰로틀링 표시·화면 이벤트 검사, Kotlin/Gradle 빌드와 APK 서명 검증을 통과했습니다. [변경·검증 상세](docs/UI_MONITORING_UPDATE.md) · [기기 검사 코드](tests/device)
+v0.5.6은 순수 로직 203개 검사, 에뮬레이터의 토글·설정 적용·레이아웃·쓰로틀링 표시·화면 이벤트 검사, Kotlin/Gradle 빌드와 APK 서명 검증을 통과했습니다. [변경·검증 상세](docs/UI_MONITORING_UPDATE.md) · [기기 검사 코드](tests/device)
 
 기능·UI 코드는 [app/src/main/java/kr/local/galaxybattery](app/src/main/java/kr/local/galaxybattery)에 있습니다. [개발 가이드](docs/DEVELOPMENT.md) · [외부 라이선스](THIRD_PARTY.md) · [Issues](https://github.com/Lumi-01/galaxy-battery-health-check/issues)
