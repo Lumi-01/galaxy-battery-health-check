@@ -31,7 +31,7 @@ class PowerGraphView(context: Context, private val palette: AppPalette = AppPale
         if (samples == values) return
         samples = values
         selected = selected?.takeIf { values.contains(it) }
-        contentDescription = "전력 그래프, ${values.size}개 측정. 양수는 배터리로 유입, 음수는 방전 전력."
+        contentDescription = "전력 그래프. 양수는 충전, 음수는 방전. 회색은 화면 꺼짐 구간."
         invalidate()
     }
     override fun onDraw(canvas: Canvas) {

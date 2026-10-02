@@ -30,10 +30,18 @@ class AppSettings(context: Context) {
     var temperatureSensors: Boolean
         get() = preferences.getBoolean("temperature_sensors", false)
         set(value) { preferences.edit().putBoolean("temperature_sensors", value).apply() }
+    // Preserve the previous discharge preference and the charging-on default on upgrade.
+    var showCharging: Boolean
+        get() = preferences.getBoolean(SHOW_CHARGING, true)
+        set(value) { preferences.edit().putBoolean(SHOW_CHARGING, value).apply() }
     var showDischarge: Boolean
         get() = preferences.getBoolean(SHOW_DISCHARGE, false)
         set(value) { preferences.edit().putBoolean(SHOW_DISCHARGE, value).apply() }
     fun isDark(context: Context) = RefreshPolicy.dark(theme,
         context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES)
-    companion object { const val POWER_INTERVAL = "power_seconds"; const val SHOW_DISCHARGE = "show_discharge" }
+    companion object {
+        const val POWER_INTERVAL = "power_seconds"
+        const val SHOW_CHARGING = "show_charging"
+        const val SHOW_DISCHARGE = "show_discharge"
+    }
 }

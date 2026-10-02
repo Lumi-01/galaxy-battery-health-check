@@ -49,7 +49,7 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         gpu.addView(OneUiToggle(context, palette, "GPU 코어별 보기", "기기에서 제공하는 정보 확인", settings.gpuCores) {
             settings.gpuCores = it; gpuDetails.visibility = if (it) VISIBLE else GONE
         })
-        gpuDetails = label(gpu, "현재 조회 방식은 GPU 전체 사용률과 클럭만 제공해요.\nGPU 코어별 그래프는 표시할 수 없어요.", 12, palette.muted)
+        gpuDetails = label(gpu, "현재 조회 방식은 GPU 전체 정보만 지원해요", 12, palette.muted)
         gpuDetails.visibility = if (settings.gpuCores) VISIBLE else GONE
 
         val temperatures = card()
@@ -68,7 +68,7 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         footer.setPadding(dp(4), dp(16), dp(4), dp(8))
         val connection = AppUi.action(context, palette, "Shizuku 연결 · 권한 확인", clicked = connect)
         addView(connection, LayoutParams(-1, dp(AppUi.ACTION_HEIGHT)))
-        label(this, "읽지 못한 값은 —로 표시해요.\nShizuku 연결 후 읽을 수 있는 항목이 늘어날 수 있어요.", 12, palette.muted)
+        label(this, "—는 정보 없음 · Shizuku로 추가 조회 가능", 12, palette.muted)
             .setPadding(dp(4), dp(12), dp(4), dp(4))
         renderCores(); renderSensors()
     }
@@ -90,7 +90,7 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         cpuTemperature.text = temperature(latest.cpuTemperature?.value)
         gpuTemperature.text = temperature(latest.gpuTemperature?.value)
         val time = SimpleDateFormat("HH:mm:ss", Locale.KOREA).format(Date(latest.time))
-        footer.text = "조회 출처 $source\n업데이트 $time\n${settings.hardwareSeconds}초마다 갱신\n최근 120개 표시\n이 화면에서만 측정"
+        footer.text = "$source · $time\n${settings.hardwareSeconds}초 간격 · 이 화면에서만 측정"
         renderCores(); renderSensors()
     }
     fun setBatteryTemperature(value: Double?) { batteryTemperature.text = temperature(value) }
@@ -196,7 +196,7 @@ class HardwareMonitorView(context: Context, private val palette: AppPalette,
         row.addView(value); parent.addView(row); return value
     }
     private fun card(): LinearLayout = AppUi.card(context, palette).apply {
-        this@HardwareMonitorView.addView(this, LayoutParams(-1, -2).apply { topMargin = dp(20) })
+        this@HardwareMonitorView.addView(this, LayoutParams(-1, -2).apply { topMargin = dp(14) })
     }
     private fun divider(parent: LinearLayout) {
         parent.addView(View(context).apply { setBackgroundColor((palette.muted and 0xFFFFFF) or (28 shl 24)); importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO },

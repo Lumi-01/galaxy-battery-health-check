@@ -27,7 +27,7 @@ class ChargeMonitorService : Service() {
             if (key == AppSettings.POWER_INTERVAL) {
                 nextSample?.cancel(false)
                 sampleAndSchedule()
-            } else if (key == AppSettings.SHOW_DISCHARGE) {
+            } else if (key == AppSettings.SHOW_CHARGING || key == AppSettings.SHOW_DISCHARGE) {
                 getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(snapshot.samples.lastOrNull()))
             }
         }
@@ -44,7 +44,7 @@ class ChargeMonitorService : Service() {
     private var dischargeCount = 0L
     private var dischargeMaximum: Double? = null
     private val points = ArrayDeque<ChargePower.Sample>()
-    private val zero = ZeroPowerTracker()
+    private val interruptions = ChargeInterruptionTracker()
     private val chargingMean = ChargePower.Mean()
     private val dischargeMean = ChargePower.Mean()
     private val screenEvents = ArrayDeque<ScreenTimeline.Event>()
@@ -101,7 +101,7 @@ class ChargeMonitorService : Service() {
                     dischargeCount = recovered.dischargeCount; dischargeMaximum = recovered.dischargeMaximum
                     chargingMean.restore(recovered.chargingCount, recovered.chargingAverage)
                     dischargeMean.restore(recovered.dischargeCount, recovered.dischargeAverage)
-                    zero.restore(recovered.zeroState)
+                    interruptions.restore(recovered.interruptionState)
                     screenEvents.addAll(recovered.screenEvents)
                     // Never shade a process outage as a continuously observed screen-off period.
                     rememberScreen(ScreenTimeline.Event(maxOf(recovered.lastSampleTime, recovered.screenEvents.maxOfOrNull { it.time } ?: started), ScreenTimeline.UNKNOWN))
@@ -134,7 +134,7 @@ class ChargeMonitorService : Service() {
             store.append(sessionId ?: return, value)
             if (stopping) return
             count++
-            zero.add(value)
+            interruptions.add(value)
             points.addLast(value); if (points.size > 600) points.removeFirst()
             trimScreenEvents()
             value.dischargeWatts()?.let {
@@ -147,7 +147,7 @@ class ChargeMonitorService : Service() {
                 minimum = minimum?.let { minOf(it, watts) } ?: watts
                 maximum = maximum?.let { maxOf(it, watts) } ?: watts
             }
-            snapshot = Snapshot(true, sessionId, started, count, minimum, maximum, points.toList(), zeroState = zero.state(), dischargeCount = dischargeCount, dischargeMaximum = dischargeMaximum,
+            snapshot = Snapshot(true, sessionId, started, count, minimum, maximum, points.toList(), interruptionState = interruptions.state(), dischargeCount = dischargeCount, dischargeMaximum = dischargeMaximum,
                 chargingAverage = chargingMean.average, dischargeAverage = dischargeMean.average, screenEvents = screenEvents.toList())
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(value))
         } catch (_: Exception) { fail("측정이 중단됐어요. 저장 공간과 앱 실행 설정을 확인해 주세요.") }
@@ -180,12 +180,12 @@ class ChargeMonitorService : Service() {
     }
 
     private fun notification(value: ChargePower.Sample?): Notification {
-        val watts = ChargePower.liveWatts(value, settings.showDischarge)
+        val watts = ChargePower.liveWatts(value, settings.showCharging, settings.showDischarge)
         val title = when {
             value == null -> "충전·방전 측정 중"
             watts != null && watts < 0 -> "방전 ${ChargePower.text(watts)}"
             value.plugged == 0 -> "방전 기록 중"
-            watts == null -> "충전 전력 확인 중"
+            watts == null -> "충전·방전 기록 중"
             else -> ChargePower.text(watts)
         }
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -202,7 +202,7 @@ class ChargeMonitorService : Service() {
             // Same extras key as NotificationCompat.setRequestPromotedOngoing; the
             // framework setter is a 36.1 API, while the chip text API is available in 36.
             builder.addExtras(Bundle().apply { putBoolean("android.requestPromotedOngoing", watts != null) })
-            builder.setShortCriticalText(ChargePower.chip(watts))
+            if (watts != null) builder.setShortCriticalText(ChargePower.chip(watts))
         }
         return builder.build()
     }
@@ -223,7 +223,7 @@ class ChargeMonitorService : Service() {
     data class Snapshot(val active: Boolean = false, val id: String? = null, val started: Long = 0L,
                         val count: Long = 0L, val minimum: Double? = null, val maximum: Double? = null,
                         val samples: List<ChargePower.Sample> = emptyList(), val error: String? = null,
-                        val zeroState: ZeroPowerTracker.State = ZeroPowerTracker().state(),
+                        val interruptionState: ChargeInterruptionTracker.State = ChargeInterruptionTracker().state(),
                         val dischargeCount: Long = 0, val dischargeMaximum: Double? = null,
                         val chargingAverage: Double? = null, val dischargeAverage: Double? = null,
                         val screenEvents: List<ScreenTimeline.Event> = emptyList())

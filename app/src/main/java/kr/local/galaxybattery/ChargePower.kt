@@ -13,8 +13,9 @@ object ChargePower {
     @JvmStatic fun text(watts: Double?): String = watts?.let { String.format(Locale.US, "%.1f W", it) } ?: "— W"
     @JvmStatic fun chip(watts: Double?): String = watts?.let { String.format(Locale.US, "%.1fW", it) } ?: "—W"
     /** Never take abs(): the live chip must preserve the direction of battery power. */
-    @JvmStatic fun liveWatts(sample: Sample?, showDischarge: Boolean): Double? = sample?.chargingWatts()
-        ?: if (showDischarge) sample?.watts()?.takeIf { it < 0 } else null
+    @JvmStatic fun liveWatts(sample: Sample?, showCharging: Boolean, showDischarge: Boolean): Double? =
+        (if (showCharging) sample?.chargingWatts() else null)
+            ?: if (showDischarge) sample?.watts()?.takeIf { it < 0 } else null
 
     data class Sample @JvmOverloads constructor(val time: Long, val currentUa: Int, val voltageMv: Int, val level: Int,
                       val temperature: Int, val status: Int, val plugged: Int, val thermalStatus: Int = -1) {

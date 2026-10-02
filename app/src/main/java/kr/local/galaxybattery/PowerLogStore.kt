@@ -8,7 +8,7 @@ import java.util.UUID
 class PowerLogStore(private val directory: File) {
     data class Session(val id: String, val started: Long, val ended: Long, val count: Long,
                        val minimum: Double?, val maximum: Double?, val samples: List<ChargePower.Sample>,
-                       val zeroState: ZeroPowerTracker.State, val peakThermal: Int,
+                       val interruptionState: ChargeInterruptionTracker.State, val peakThermal: Int,
                        val dischargeCount: Long = 0, val dischargeMinimum: Double? = null, val dischargeMaximum: Double? = null,
                        val chargingCount: Long = 0, val chargingAverage: Double? = null, val dischargeAverage: Double? = null,
                        val screenEvents: List<ScreenTimeline.Event> = emptyList(), val lastSampleTime: Long = 0L)
@@ -52,7 +52,7 @@ class PowerLogStore(private val directory: File) {
         require(limit in 0..3600)
         val points = ArrayDeque<ChargePower.Sample>()
         val stats = ChargePower.Stats()
-        val zero = ZeroPowerTracker()
+        val interruptions = ChargeInterruptionTracker()
         var peakThermal = -1
         var lastSampleTime = 0L
         RandomAccessFile(file(id), "r").use { input ->
@@ -64,11 +64,11 @@ class PowerLogStore(private val directory: File) {
                     input.readInt(), input.readInt(), input.readInt(), if (record == RECORD) input.readInt() else -1)
                 stats.add(sample)
                 lastSampleTime = sample.time
-                zero.add(sample)
+                interruptions.add(sample)
                 if (sample.thermalStatus in 0..6) peakThermal = maxOf(peakThermal, sample.thermalStatus)
                 if (limit > 0) { points.addLast(sample); if (points.size > limit) points.removeFirst() }
             }
-            Session(id, started, ended, count, stats.minimum, stats.maximum, points.toList(), zero.state(), peakThermal,
+            Session(id, started, ended, count, stats.minimum, stats.maximum, points.toList(), interruptions.state(), peakThermal,
                 stats.dischargeCount, stats.dischargeMinimum, stats.dischargeMaximum, stats.chargingCount,
                 stats.chargingAverage, stats.dischargeAverage, readScreenEvents(id), lastSampleTime)
         }

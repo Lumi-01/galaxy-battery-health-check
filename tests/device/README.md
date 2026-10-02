@@ -4,7 +4,7 @@
 
 1. 저장소 루트에서 `./build.ps1`로 앱과 순수 테스트를 빌드합니다.
 2. `powershell -NoProfile -ExecutionPolicy Bypass -File tests/device/build.ps1`를 실행합니다. `setup-tools.ps1`로 준비한 JDK·SDK와 동일한 개발 서명키를 사용합니다.
-3. `adb -s <기기 ID> install -r dist/galaxy-battery-0.5.4.apk`와 `adb -s <기기 ID> install -r -t build/device-tests/visual-checks.apk`로 설치합니다.
+3. `adb -s <기기 ID> install -r dist/galaxy-battery-0.5.5.apk`와 `adb -s <기기 ID> install -r -t build/device-tests/visual-checks.apk`로 설치합니다.
 4. `adb -s <기기 ID> shell am instrument -w -e mode switch kr.local.galaxybattery.visualtests/kr.local.galaxybattery.visualtests.RegressionChecks`를 실행합니다. 실제 화면 픽셀의 OFF → ON → OFF 변화, 행·스위치 클릭, 코어 표시와 저장 설정의 일치, Binder 열 조회를 확인합니다.
 
 `mode screen`은 알림 권한을 허용한 테스트 기기에서 실행합니다. 전력 측정을 60초 간격으로 시작하고 `ready=screen`을 기다립니다. 이때 기기에서 약 2초 동안 화면을 껐다 켠 뒤 `adb shell am broadcast -a kr.local.galaxybattery.REGRESSION_DONE -p kr.local.galaxybattery`를 보냅니다. 60초 샘플 사이의 화면 꺼짐이 별도 이벤트로 저장됐는지 확인하고 측정을 종료합니다. 테스트가 끝나면 기록 간격을 5초로 돌립니다.
@@ -18,3 +18,5 @@ OS 열 이벤트는 Android 에뮬레이터의 `adb shell cmd thermalservice ove
 `mode layout`은 모든 페이지의 카드·하단 메뉴 정렬, 48dp 버튼 높이, 8개 코어의 2열 배치, 카드 크기와 글자 넘침, 공통 다이얼로그 폭을 검사합니다. 코어 값은 별도 테스트용 데이터이며 앱에는 포함하지 않습니다.
 
 `mode preview`는 앱을 강제 종료한 뒤 실행해 미리보기만 열고 `ready=preview`를 기다립니다. `mode screen`과 같이 화면을 약 2초 껐다 켜고 완료 방송을 보내면, 측정을 시작하지 않아도 화면 이벤트가 그래프에 반영되는지 검사합니다. 화면 상태 확인이 전력 샘플을 임의로 추가하거나 기록 서비스를 시작하지 않는지도 확인합니다.
+
+`mode live`는 알림 권한을 허용하고 충전 중인 테스트 기기에서 실행합니다. 설정의 충전·방전 토글을 접근성 클릭으로 조작해 취소·적용, 60초 샘플 전 즉시 알림 반영, 기록 세션·샘플 수·Activity 유지를 검사합니다. 이전 표시 옵션·측정 간격을 복원하고 자신이 만든 기록만 삭제합니다. Android 15에서는 일반 알림 텍스트 반영을 확인하며 Android 16 칩 승격 자체는 실기기에서 별도로 확인해야 합니다.

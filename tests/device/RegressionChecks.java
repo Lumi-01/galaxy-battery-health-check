@@ -5,6 +5,7 @@ import android.content.*;
 import android.graphics.*;
 import android.os.*;
 import android.view.*;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.*;
 import java.lang.reflect.*;
 import java.io.*;
@@ -35,13 +36,59 @@ public class RegressionChecks extends Instrumentation {
         if(view instanceof ViewGroup){ViewGroup g=(ViewGroup)view;for(int i=0;i<g.getChildCount();i++)checkTextFits(g.getChildAt(i));}
     }
     void idle(){waitForIdleSync();SystemClock.sleep(300);}
+    void clickAccessible(String label,boolean toggle){
+        AccessibilityNodeInfo root=null;long deadline=SystemClock.elapsedRealtime()+4000;
+        while(root==null && SystemClock.elapsedRealtime()<deadline){root=getUiAutomation().getRootInActiveWindow();if(root==null)SystemClock.sleep(100);}
+        if(root==null)throw new AssertionError("No active accessibility window: "+label);
+        for(AccessibilityNodeInfo node:root.findAccessibilityNodeInfosByText(label)){
+            if(node.isClickable() && (!toggle || node.isCheckable())){
+                check(node.performAction(AccessibilityNodeInfo.ACTION_CLICK),"Accessible action: "+label);idle();return;
+            }
+        }
+        throw new AssertionError("Control not found: "+label);
+    }
+    String notificationTitle(){
+        for(android.service.notification.StatusBarNotification n:((NotificationManager)getTargetContext().getSystemService(Context.NOTIFICATION_SERVICE)).getActiveNotifications())
+            if(n.getId()==40)return n.getNotification().extras.getString(Notification.EXTRA_TITLE,"");
+        return "";
+    }
     @Override public void onStart(){
         Activity activity=null;
         try{
             String mode=args.getString("mode","switch");
             if(mode.equals("thermal"))new AppSettings(getTargetContext()).setHardwareSeconds(60);
             activity=startActivitySync(new Intent(getTargetContext(),MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            if(mode.equals("switch")){
+            if(mode.equals("live")){
+                final Activity a=activity;AppSettings settings=new AppSettings(a);
+                final boolean oldCharge=settings.getShowCharging(),oldDischarge=settings.getShowDischarge();final int oldSeconds=settings.getPowerSeconds();
+                String id=null;
+                try{
+                    settings.setPowerSeconds(60);settings.setShowCharging(true);settings.setShowDischarge(false);
+                    check(!ChargeMonitorService.Companion.getSnapshot().getActive(),"Live test requires a stopped recorder");
+                    runOnMainSync(()->a.startForegroundService(new Intent(a,ChargeMonitorService.class)));
+                    long deadline=SystemClock.elapsedRealtime()+5000;
+                    while((ChargeMonitorService.Companion.getSnapshot().getCount()==0 || !notificationTitle().contains("W")) && SystemClock.elapsedRealtime()<deadline)SystemClock.sleep(100);
+                    id=ChargeMonitorService.Companion.getSnapshot().getId();long count=ChargeMonitorService.Companion.getSnapshot().getCount();
+                    check(id!=null && notificationTitle().contains("W"),"Charging display initially contains watts");
+                    final Method show=a.getClass().getDeclaredMethod("showSettings");show.setAccessible(true);
+                    runOnMainSync(()->{try{show.invoke(a);}catch(Exception e){throw new RuntimeException(e);}});idle();
+                    clickAccessible("충전 전력 표시",true);clickAccessible("방전 전력 표시",true);clickAccessible("취소",false);
+                    check(settings.getShowCharging() && !settings.getShowDischarge(),"Cancel leaves both display flags unchanged");
+                    runOnMainSync(()->{try{show.invoke(a);}catch(Exception e){throw new RuntimeException(e);}});idle();
+                    clickAccessible("충전 전력 표시",true);clickAccessible("방전 전력 표시",true);clickAccessible("적용",false);
+                    check(!settings.getShowCharging() && settings.getShowDischarge(),"Apply persists independent charge/discharge flags");
+                    deadline=SystemClock.elapsedRealtime()+3000;while(notificationTitle().contains("W")&&SystemClock.elapsedRealtime()<deadline)SystemClock.sleep(100);
+                    check(!notificationTitle().isEmpty() && !notificationTitle().contains("W"),"Disabled charging display updates before next 60s sample");
+                    check(id.equals(ChargeMonitorService.Companion.getSnapshot().getId()) && count==ChargeMonitorService.Companion.getSnapshot().getCount(),"Display changes preserve the session and sampling cadence");
+                    check(!a.isFinishing() && !a.isDestroyed(),"Display settings do not recreate the activity");
+                    settings.setShowCharging(true);deadline=SystemClock.elapsedRealtime()+3000;while(!notificationTitle().contains("W")&&SystemClock.elapsedRealtime()<deadline)SystemClock.sleep(100);
+                    check(notificationTitle().contains("W"),"Re-enabling charging republishes current watts immediately");
+                }finally{
+                    runOnMainSync(()->a.startService(new Intent(a,ChargeMonitorService.class).setAction(ChargeMonitorService.STOP)));SystemClock.sleep(600);
+                    settings.setPowerSeconds(oldSeconds);settings.setShowCharging(oldCharge);settings.setShowDischarge(oldDischarge);
+                    if(id!=null){new PowerLogStore(new File(a.getNoBackupFilesDir(),"power-history")).delete(Collections.singletonList(id),null);ChargeMonitorService.Companion.forgetDeleted(Collections.singletonList(id));}
+                }
+            }else if(mode.equals("switch")){
                 final OneUiToggle[] row=new OneUiToggle[1];final Dialog[] dialog=new Dialog[1];final int[] callbacks={0};final Activity a=activity;
                 runOnMainSync(()->{
                     row[0]=new OneUiToggle(a,AppPalette.Companion.forDark(false),"토글 검증","Switch redraw verification",false,value->{callbacks[0]++;return kotlin.Unit.INSTANCE;});
@@ -78,7 +125,7 @@ public class RegressionChecks extends Instrumentation {
                 HardwareTelemetry telemetry=new HardwareTelemetry();telemetry.describe(raw,"test");
                 final ThermalStatusView[] thermal=new ThermalStatusView[1];
                 runOnMainSync(()->{thermal[0]=new ThermalStatusView(a,AppPalette.Companion.forDark(false));thermal[0].setStatus(0,1.1f,telemetry.getLatest().getCooling(),1,"Shizuku",1,1);});
-                check(thermal[0].getContentDescription().toString().contains("1개 작동") && thermal[0].getContentDescription().toString().contains("OS 제한 보고 없음"),"OS zero must not hide active kernel cooling signals");
+                check(thermal[0].getContentDescription().toString().contains("1개 작동") && thermal[0].getContentDescription().toString().contains("쓰로틀링 0단계"),"OS zero must not hide active kernel cooling signals");
             }else if(mode.equals("preview")){
                 final Activity a=activity;
                 DashboardScaffold dashboard=(DashboardScaffold)field(a,"dashboard");
@@ -132,7 +179,7 @@ public class RegressionChecks extends Instrumentation {
                 });idle();
                 runOnMainSync(()->{
                     try{
-                        checkTextFits((View)monitor.getChildAt(0));checkTextFits((View)monitor.getChildAt(1));
+                        checkTextFits((View)field(a,"powerStats"));checkTextFits((View)monitor.getChildAt(0));checkTextFits((View)monitor.getChildAt(1));
                         LinearLayout details=(LinearLayout)field(monitor,"cpuDetails");check(details.getChildCount()==4,"8 cores occupy 4 rows");
                         for(int i=0;i<4;i++){
                             LinearLayout row=(LinearLayout)details.getChildAt(i);check(row.getChildCount()==2,"Two cores in each row");
@@ -181,11 +228,13 @@ public class RegressionChecks extends Instrumentation {
                 check(session.getCount()==1,"A short OFF/ON period did not require additional scheduled samples");
                 runOnMainSync(()->a.startService(new Intent(a,ChargeMonitorService.class).setAction(ChargeMonitorService.STOP)));SystemClock.sleep(600);
                 check(!ChargeMonitorService.Companion.getSnapshot().getActive(),"Recording stopped cleanly");
+                store.delete(Collections.singletonList(id),null);ChargeMonitorService.Companion.forgetDeleted(Collections.singletonList(id));
                 runOnMainSync(()->new AppSettings(a).setPowerSeconds(5));
             }else if(mode.equals("history")){
                 PowerLogStore store=new PowerLogStore(new File(getTargetContext().getNoBackupFilesDir(),"power-history"));
                 long time=System.currentTimeMillis()-300000;String id=store.create(time);
-                for(int i=0;i<60;i++){int current=i<40 ? 1500000+(int)(800000*Math.sin(i*.3)) : -500000-(int)(200000*Math.sin(i*.3));store.append(id,new ChargePower.Sample(time+i*5000,current,4000,70,320,i<40?2:3,i<40?1:0,0));}
+                for(int i=0;i<60;i++){boolean charging=i<30 || i>=40;int current=charging ? 1500000+(int)(800000*Math.sin(i*.3)) : -500000-(int)(200000*Math.sin(i*.3));store.append(id,new ChargePower.Sample(time+i*5000,current,4000,70,320,charging?2:4,1,0));}
+                check(store.read(id,600).getInterruptionState().getCount()==1,"History replays connected discharge followed by charging recovery");
                 store.appendScreenEvent(id,new ScreenTimeline.Event(time,1));store.appendScreenEvent(id,new ScreenTimeline.Event(time+60000,0));store.appendScreenEvent(id,new ScreenTimeline.Event(time+180000,1));store.finish(id,time+300000);
                 final Activity a=activity;final String sessionId=id;
                 runOnMainSync(()->{try{Method m=a.getClass().getDeclaredMethod("loadPowerSession",String.class);m.setAccessible(true);m.invoke(a,sessionId);}catch(Exception e){throw new RuntimeException(e);}});
